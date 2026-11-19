@@ -3,14 +3,24 @@ import * as path from 'node:path';
 import {readTimeline,writeTimeline,edit,duration,transcripts} from './core';
 import {validateMedia,exportTimeline,ensureProxy} from './media';
 import {commit} from './history';
+import {computeSignal,sourceList,candidates,candidateTimeline} from './signals';
 export async function main(argv:string[]) {
   const args=[...argv];let root=process.cwd();
   if(args[0]==='--project') {args.shift();root=path.resolve(args.shift()||'.');}
   const command=args.shift();
-  if(!command||command==='help') {console.log('vidcli [--project PATH] summary | search KEYWORD | add ID sources/FILE IN OUT [REASON] | remove ID | trim ID IN OUT | move ID INDEX | check [--json] | validate | proxies | commit MESSAGE | export');return;}
+  if(!command||command==='help') {console.log('vidcli [--project PATH] signals [--source sources/FILE] | candidates --target SEC [--win 10|20|30] [--source sources/FILE] [--apply] | summary | search KEYWORD | add ID sources/FILE IN OUT [REASON] | remove ID | trim ID IN OUT | move ID INDEX | check [--json] | validate | proxies | commit MESSAGE | export');return;}
   if(command==='search') {
     const keyword=args.join(' ').toLocaleLowerCase();if(!keyword) throw Error('Keyword required');
     for(const [source,segments] of Object.entries(await transcripts(root))) for(const s of segments) if(s.text.toLocaleLowerCase().includes(keyword)) console.log(JSON.stringify({source,...s}));return;
+  }
+  if(command==='signals'||command==='candidates') {
+    const options=new Map<string,string>();let apply=false;
+    while(args.length){const key=args.shift()!;if(key==='--apply'&&command==='candidates'){apply=true;continue;}if(!['--source',...(command==='candidates'?['--target','--win']:[])].includes(key)||!args.length||args[0].startsWith('--'))throw Error('Invalid option: '+key);options.set(key,args.shift()!);}
+    if(command==='signals'){for(const source of await sourceList(root,options.get('--source'))){const s=await computeSignal(root,source);console.log(JSON.stringify({source,hash:s.hash,duration:s.duration,windows:s.windows.length,file:'signals/'+source.slice(8)+'.json'}));}}
+    else {const target=Number(options.get('--target')),win=Number(options.get('--win')||20),scenes=await candidates(root,target,win,options.get('--source'));let applied;
+      if(apply){const next=candidateTimeline(scenes,target);await validateMedia(root,next);await writeTimeline(root,next);applied={duration:duration(next),clips:next.clips.length};}
+      console.log(JSON.stringify({target,win,candidates:scenes,...(applied?{applied}:{})},null,2));}
+    return;
   }
   const t=await readTimeline(root);
   if(command==='summary') console.log(JSON.stringify({clips:t.clips.length,duration:duration(t),timeline:t},null,2));

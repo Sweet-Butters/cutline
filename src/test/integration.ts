@@ -4,12 +4,14 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {writeTimeline,readTimeline} from '../core';
 import {checkProject,hash} from '../check';
+import {computeSignal} from '../signals';
 async function until<T>(fn:()=>T,description:string,timeout=180000):Promise<NonNullable<T>>{
   const start=Date.now();while(Date.now()-start<timeout){const result=fn();if(result)return result as NonNullable<T>;await new Promise(r=>setTimeout(r,100));}throw Error(`Timed out: ${description}`);
 }
 export async function run(){
   const root=process.env.CUTLINE_TEST_ROOT!,sample=path.join(root,'sample-project'),file=path.join(sample,'timeline.json');
   const original=await fs.readFile(file,'utf8');
+  await computeSignal(sample,'sources/camera-1.mp4');
   const styleFile=path.join(sample,'style.md'),originalStyle=await fs.readFile(styleFile,'utf8');
   const logFile=path.join(sample,'.cutline/edit-log.jsonl');const oldLog=await fs.readFile(logFile).catch(()=>undefined);
   const referenceFile=path.join(sample,'reference','integration.timeline.json');await fs.mkdir(path.dirname(referenceFile),{recursive:true});await fs.writeFile(referenceFile,original);
@@ -21,6 +23,13 @@ export async function run(){
     assert.equal(vscode.workspace.getConfiguration('files').get<Record<string,boolean>>('exclude')?.['**/.cutline-cache'],true);
     const reference=await until(()=>api.events.find((e:any)=>e.type==='referencesApplied'&&e.items.some((i:any)=>i.name==='integration.timeline.json')),'reference track rendered');
     assert.equal(reference.items.find((i:any)=>i.name==='integration.timeline.json').metrics.f1,1);
+    assert.ok(reference.signalBars>0,'loudness shares the comparison axis');
+    await api.testAction('layout');
+    const layout=await until(()=>api.events.find((e:any)=>e.type==='layout'&&e.signalBars>0),'signals layout');
+    assert.equal(layout.checklistOpen,false,'checklist collapsed by default');assert.equal(layout.chatVisible,true);
+    await api.testAction('click',{id:'check-summary'});await api.testAction('layout');
+    await until(()=>api.events.some((e:any)=>e.type==='layout'&&e.checklistOpen),'checklist expands on click');
+    await api.testAction('click',{id:'check-summary'});
     await vscode.commands.executeCommand('cutline.askAgent');
     const first=await until(()=>api.events.find((e:any)=>e.type==='applied'),'webview received first timeline');assert.equal(first.clipCount,4);
     assert.ok(vscode.window.tabGroups.all.some(g=>g.viewColumn===vscode.ViewColumn.One&&g.tabs.some(t=>t.input instanceof vscode.TabInputWebview)),'Chat and video use full editor width');

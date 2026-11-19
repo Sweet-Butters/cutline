@@ -4,7 +4,7 @@ import {spawn,ChildProcess} from 'node:child_process';
 import {StringDecoder} from 'node:string_decoder';
 export type Backend='claude'|'codex';
 export type AgentEvent={kind:'step'|'assistant'|'error'|'session';text:string};
-export const defaultPrompts=['style.md대로 20분 편집본 만들어줘','웃긴 장면 위주 3분 하이라이트','방금 편집에서 앞부분 30초 줄여줘'];
+export const defaultPrompts=['소리 신호로 뼈대 잡고 style.md대로 20분 편집','style.md대로 20분 편집본 만들어줘','웃긴 장면 위주 3분 하이라이트','방금 편집에서 앞부분 30초 줄여줘'];
 export async function prompts(root:string){
   try {const value=JSON.parse(await fs.readFile(path.join(root,'.cutline/prompts.json'),'utf8'));if(!Array.isArray(value)||value.length>20||value.some(p=>typeof p!=='string'||!p.trim()||p.length>2000))throw Error('문자열 배열이 필요합니다');return value as string[];}
   catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return defaultPrompts;throw Error(`.cutline/prompts.json: ${e}`);}

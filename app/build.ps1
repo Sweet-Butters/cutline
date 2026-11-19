@@ -59,7 +59,7 @@ try {
 }finally{$env:VSCODE_PORTABLE=$savedPortable}
 # Copy only the known sample inputs, never caches, exports or personal history.
 New-Item -ItemType Directory -Force "$bundle/sample-project","$bundle/tools","$bundle/out" | Out-Null
-foreach($item in @('sources','transcripts','timeline.json','edit-spec.json','style.md','AGENTS.md','CLAUDE.md')){Copy-Item -LiteralPath "$root/sample-project/$item" -Destination "$bundle/sample-project" -Recurse}
+foreach($item in @('sources','transcripts','signals','reference','timeline.json','edit-spec.json','style.md','AGENTS.md','CLAUDE.md')){Copy-Item -LiteralPath "$root/sample-project/$item" -Destination "$bundle/sample-project" -Recurse}
 Copy-Item "$root/tools/vidcli.js","$root/tools/compare.js" "$bundle/tools/"
 Copy-Item "$root/out/*.js" "$bundle/out/"
 Copy-Item "$root/package.json" $bundle

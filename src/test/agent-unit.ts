@@ -30,7 +30,7 @@ test('subscription CLI command uses exact arguments, scoped tools, and explicit 
 });
 test('missing CLI and project prompt configuration errors are actionable',async()=>{
   await assert.rejects(resolveCLI('claude',{PATH:path.join(root,'does-not-exist')}),/PATH/);
-  const dir=await fs.mkdtemp(path.join(root,'.test-data/prompts-'));assert.equal((await prompts(dir)).length,3);await fs.mkdir(path.join(dir,'.cutline'));await fs.writeFile(path.join(dir,'.cutline/prompts.json'),'["내 편집"]');assert.deepEqual(await prompts(dir),['내 편집']);await fs.writeFile(path.join(dir,'.cutline/prompts.json'),'{}');await assert.rejects(prompts(dir),/prompts.json/);
+  const dir=await fs.mkdtemp(path.join(root,'.test-data/prompts-'));assert.ok((await prompts(dir)).includes('소리 신호로 뼈대 잡고 style.md대로 20분 편집'));await fs.mkdir(path.join(dir,'.cutline'));await fs.writeFile(path.join(dir,'.cutline/prompts.json'),'["내 편집"]');assert.deepEqual(await prompts(dir),['내 편집']);await fs.writeFile(path.join(dir,'.cutline/prompts.json'),'{}');await assert.rejects(prompts(dir),/prompts.json/);
 });
 test('recorded CLI JSONL survives byte chunk boundaries, emits steps, final and errors',async()=>{
   for(const backend of ['claude','codex']){

@@ -1,5 +1,7 @@
 # Video editing workspace
 
+Recommended workflow: `signals` → `candidates --target SEC` → read transcripts around candidates → keep whole scenes (setup → action → reaction), add needed dialogue context → `check` → save. Use `node ../tools/vidcli.js COMMAND`; `candidates --apply` is a starting point in source order. Refine selection and reasons using style.md.
+
 Read and follow ./AGENTS.md and ./style.md before editing. AGENTS.md documents all files, the timeline schema, and the local vidcli commands. Edit timeline.json to make cuts; preserve existing clip ids for trims/moves. Validate with `node ../tools/vidcli.js validate`. The live panel reacts when the file is saved. Use git commits for versions, and never push.
 
 ## 편집 검증 사양

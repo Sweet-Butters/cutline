@@ -14,8 +14,12 @@ This folder is a video project. Read style.md before editing. No paid APIs or up
 From this sample folder, CLI: node ../tools/vidcli.js COMMAND (run npm run build in repository root first).
 From another working directory: node "D:/orca/projects/video-ide/tools/vidcli.js" --project "PROJECT_PATH" COMMAND.
 
+Recommended workflow: `signals` → `candidates --target SEC` → read transcripts around candidates → keep whole scenes (setup → action → reaction), add needed dialogue context → `check` → save. `candidates --apply` replaces the timeline with whole scenes that fit the target, in source order; refine this starting point using style.md. Loudness is a cue, not editorial quality.
+
 Commands:
 ```
+signals
+candidates --target 180 --win 20
 summary
 search 핵심
 add hook sources/camera-1.mp4 0 10 "핵심 질문"

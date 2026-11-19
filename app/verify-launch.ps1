@@ -1,11 +1,11 @@
-param([string]$Project,[string]$Screenshot='cutline-launch-2.png',[switch]$AllowPreparing)
+param([string]$Project,[string]$Screenshot='cutline-launch-2.png',[switch]$AllowPreparing,[int]$Width=1440,[int]$Height=900,[int]$WaitSeconds=240,[string]$CacheRoot)
 $ErrorActionPreference='Stop'
 $bundle=Join-Path $PSScriptRoot 'build/Cutline'
 $exe=Join-Path $bundle 'VSCodium.exe'
 $env:TEMP=Join-Path $PSScriptRoot 'temp';$env:TMP=$env:TEMP
 # Keep verification writes in this repository, while exercising the default-copy branch.
 $env:CUTLINE_DOCUMENTS=Join-Path (Split-Path $PSScriptRoot -Parent) '.test-data/Documents'
-$env:CUTLINE_CACHE_ROOT=Join-Path $PSScriptRoot 'temp/verification-cache'
+$env:CUTLINE_CACHE_ROOT=if($CacheRoot){[IO.Path]::GetFullPath($CacheRoot)}else{Join-Path $PSScriptRoot 'temp/verification-cache'}
 $existing=@(Get-Process VSCodium -ErrorAction SilentlyContinue | Where-Object Path -eq $exe)
 if($existing.Count){throw 'Close this bundle before verification; existing processes will not be terminated.'}
 New-Item -ItemType Directory -Force "$PSScriptRoot/screenshots" | Out-Null
@@ -28,13 +28,25 @@ public class CutlineWindow {
 $started=Get-Date
 try {
  # This window is intentionally visible: it is the app under desktop verification.
- if($Project){Start-Process -FilePath "$bundle/Cutline.exe" -ArgumentList ('"'+$Project+'"')}
+ # Explicit-project filming uses one device pixel per UI pixel, independent of
+ # the desktop's DPI. The launcher/default-copy branch is tested separately.
+ if($Project){
+  $savedElectron=$env:ELECTRON_RUN_AS_NODE
+  try {$env:ELECTRON_RUN_AS_NODE=$null;$launchArgs=@('--force-device-scale-factor=1','--new-window','--skip-welcome','--skip-release-notes');$launchArgs+=('"'+$Project+'"');Start-Process -FilePath $exe -ArgumentList $launchArgs}
+  finally {$env:ELECTRON_RUN_AS_NODE=$savedElectron}
+ }
  else{Start-Process -FilePath "$bundle/Cutline.exe"}
- $deadline=(Get-Date).AddMinutes(4)
- $window=$null;$canplay=$null;$comparison=$null
+ $deadline=(Get-Date).AddSeconds($WaitSeconds)
+ $window=$null;$canplay=$null;$comparison=$null;$positioned=$false
  do {
   Start-Sleep -Seconds 2
   $window=Get-Process VSCodium -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe -and $_.MainWindowTitle -like 'Cutline*' } | Select-Object -First 1
+  if($window -and !$positioned){
+   [CutlineWindow]::ShowWindow($window.MainWindowHandle,9) | Out-Null
+   [CutlineWindow]::SetWindowPos($window.MainWindowHandle,[IntPtr](-1),20,20,$Width,$Height,0x40) | Out-Null
+   [CutlineWindow]::SetForegroundWindow($window.MainWindowHandle) | Out-Null
+   $positioned=$true
+  }
   $logs=Get-ChildItem "$bundle/data/user-data/logs" -Filter '*Cutline*' -File -Recurse -ErrorAction SilentlyContinue | Where-Object LastWriteTime -ge $started
   $canplay=$logs | Select-String '"event":"canplay"' | Select-Object -First 1
   $comparison=$logs | Select-String '"type":"referencesApplied","items":\[{' | Select-Object -First 1
@@ -46,11 +58,13 @@ try {
  # Foreground activation alone can be denied by Windows. Temporarily keep our
  # own window on top and capture the monitor containing it, not a different one.
  $area=[Windows.Forms.Screen]::PrimaryScreen.WorkingArea
- [CutlineWindow]::SetWindowPos($window.MainWindowHandle,[IntPtr](-1),($area.X+20),($area.Y+20),($area.Width-40),($area.Height-40),0x40) | Out-Null
+ [CutlineWindow]::SetWindowPos($window.MainWindowHandle,[IntPtr](-1),($area.X+20),($area.Y+20),$Width,$Height,0x40) | Out-Null
  [CutlineWindow]::SetForegroundWindow($window.MainWindowHandle) | Out-Null
  Start-Sleep -Seconds 3
  $checklist=$logs | Select-String '"type":"checklistApplied"' | Select-Object -Last 1
- $proxyWorkers=@(Get-CimInstance Win32_Process -Filter "Name = 'ffmpeg.exe'" | Where-Object {$_.CommandLine -like '*verification-cache*' -and $_.CreationDate -ge $started})
+ $layout=$logs | Select-String '"type":"layout"' | Select-Object -Last 1
+ if($layout){$layoutData=($layout.Line.Substring($layout.Line.IndexOf('{')) | ConvertFrom-Json);if($layoutData.checklistOpen -or !$layoutData.chatVisible -or $layoutData.timelineBottom -gt $layoutData.height -or $layoutData.referencesBottom -gt $layoutData.height){throw 'Filming layout does not fit the viewport'}}
+ $proxyWorkers=@(Get-CimInstance Win32_Process -Filter "Name = 'ffmpeg.exe'" | Where-Object {$_.CommandLine -like ('*'+$env:CUTLINE_CACHE_ROOT+'*') -and $_.CreationDate -ge $started})
  $rect=New-Object CutlineWindow+Rect
  $origin=New-Object CutlineWindow+Point
  if(![CutlineWindow]::GetClientRect($window.MainWindowHandle,[ref]$rect) -or ![CutlineWindow]::ClientToScreen($window.MainWindowHandle,[ref]$origin)){throw "Cannot locate app client area"}
@@ -61,7 +75,7 @@ try {
   $graphics.CopyFromScreen($screen.Location,[Drawing.Point]::Empty,$screen.Size)
   $bitmap.Save("$PSScriptRoot/screenshots/$Screenshot",[Drawing.Imaging.ImageFormat]::Png)
  }finally{$graphics.Dispose();$bitmap.Dispose()}
- @{title=$window.MainWindowTitle;pid=$window.Id;executable=$window.Path;started=$started.ToString('o');canplay=$canplay.Line;comparison=$comparison.Line;checklist=$checklist.Line;cache=$env:CUTLINE_CACHE_ROOT;proxyWorkerCount=$proxyWorkers.Count;screenshot="app/screenshots/$Screenshot"} | ConvertTo-Json | Set-Content "$PSScriptRoot/screenshots/$Screenshot.json" -Encoding UTF8
+ @{width=$Width;height=$Height;title=$window.MainWindowTitle;pid=$window.Id;executable=$window.Path;started=$started.ToString('o');canplay=$canplay.Line;comparison=$comparison.Line;checklist=$checklist.Line;layout=$layout.Line;cache=$env:CUTLINE_CACHE_ROOT;proxyWorkerCount=$proxyWorkers.Count;screenshot="app/screenshots/$Screenshot"} | ConvertTo-Json | Set-Content "$PSScriptRoot/screenshots/$Screenshot.json" -Encoding UTF8
  Get-Content "$PSScriptRoot/screenshots/$Screenshot.json"
 }finally{
  # No global taskkill: only the bundle that was absent before this launch.

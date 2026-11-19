@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "clips": [
+    {
+      "id": "example-1",
+      "source": "sources/camera-1.mp4",
+      "in": 20,
+      "out": 80,
+      "reason": "합성 UI 시연용 사람 트랙"
+    },
+    {
+      "id": "example-2",
+      "source": "sources/camera-2.mp4",
+      "in": 40,
+      "out": 100,
+      "reason": "합성 UI 시연용 사람 트랙"
+    }
+  ]
+}

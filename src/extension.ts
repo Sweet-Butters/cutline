@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {BRAND} from './brand';
 import {Timeline,readTimeline,writeTimeline,diffTimeline,transcripts,sourcePath} from './core';
+import {readSignalWindows} from './signals';
 import {ensureProxy,validateMedia,exportTimeline,ProxyFormat,cacheDirectory,stopMediaWorkers} from './media';
 import {readReferences,referenceMetrics,kept} from './reference';
 import * as history from './history';
@@ -115,7 +116,9 @@ export function activate(context:vscode.ExtensionContext) {
       const metadata=await validateMedia(root,next);
       for(const reference of references)for(const [source,meta] of await validateMedia(root,reference.timeline))metadata.set(source,meta);
       if(request!==loadRequest)return;
-      await send({type:'references',items:references.map(r=>({name:r.name,metrics:referenceMetrics(next,r.timeline),sources:[...metadata].map(([source,meta])=>({source,duration:meta.duration,ai:kept(next,source),human:kept(r.timeline,source)}))}))});
+      const signalWindows=new Map(await Promise.all([...metadata.keys()].map(async s=>[s,await readSignalWindows(root,s)] as const)));
+      const comparisons=references.length?references:[{name:'원본 시간축 · 사람 편집본 없음',timeline:{version:1 as const,clips:[]}}];
+      await send({type:'references',items:comparisons.map(r=>({name:r.name,hasHuman:references.length>0,metrics:referenceMetrics(next,r.timeline),sources:[...metadata].map(([source,meta])=>({source,duration:meta.duration,ai:kept(next,source),human:kept(r.timeline,source),signals:signalWindows.get(source)}))}))});
       if(selected) {await send({type:'status',message:'Current file changed. Viewing history; choose Current to return.'});await listVersions();return;}
       if(!old||shownVersion||!same(old,next))await display(next,old?diffTimeline(old,next):undefined);
       else await listVersions();
@@ -134,7 +137,7 @@ export function activate(context:vscode.ExtensionContext) {
     watchers.push(watch,watch.onDidChange(schedule),watch.onDidCreate(schedule),watch.onDidDelete(schedule));
     const tw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'transcripts/**/*.json'));
     watchers.push(tw,tw.onDidChange(schedule),tw.onDidCreate(schedule),tw.onDidDelete(schedule));
-    const sw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'{edit-spec.json,style.md,sources/**}'));
+    const sw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'{edit-spec.json,style.md,sources/**,signals/**/*.json}'));
     watchers.push(sw,sw.onDidChange(schedule),sw.onDidCreate(schedule),sw.onDidDelete(schedule));
     const rw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'reference/*.timeline.json'));
     watchers.push(rw,rw.onDidChange(schedule),rw.onDidCreate(schedule),rw.onDidDelete(schedule));
@@ -229,7 +232,7 @@ function html(webview:vscode.Webview,uri:vscode.Uri) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};"><link rel="stylesheet" href="${style}"></head><body>
   <header><b>${BRAND}</b><span class="badge">AGENT VIDEO WORKSPACE</span><button id="export">Export MP4</button></header>
   <div class="workspace"><aside id="chat" aria-label="Agent chat"><div class="chat-heading"><b>편집 에이전트</b><select id="backend" aria-label="Agent backend"><option value="claude">Claude</option><option value="codex">Codex</option></select><button id="new-chat" title="새 대화">＋</button></div><p class="chat-hint">원하는 편집을 말해 주세요.<br>내 구독으로 편집하고, 변경은 영상에 바로 반영됩니다.</p><div id="messages" role="log" aria-live="polite"></div><div id="chips"></div><form id="chat-form"><textarea id="prompt" aria-label="편집 요청" placeholder="어떤 영상을 만들까요?" rows="3" maxlength="20000"></textarea><div class="chat-actions"><span id="elapsed">준비됨</span><button id="stop" type="button" disabled>중단</button><button id="send" type="submit">보내기 ↑</button></div></form></aside><div class="video-workspace"><div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
-  <main><details id="checklist" open><summary id="check-summary">검증 중…</summary><div id="check-results"></div></details><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
+  <main><details id="checklist"><summary id="check-summary">검증 중…</summary><div id="check-results"></div></details><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
   <div class="transport"><button id="play">▶ Play</button><button id="previous">⏮</button><button id="next">⏭</button><span id="time">00:00 / 00:00</span><span id="clip"></span></div>
   <input id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Timeline position">
   <div class="section-title">EDIT ORDER <span>green added · red removed · amber trimmed · blue moved</span></div><div id="timeline" tabindex="0" aria-label="편집 순서 타임라인"></div><div class="edit-tools"><button id="split">분할 S</button><button id="delete">삭제 Del</button><button id="undo" disabled>↶ 되돌리기</button><button id="redo" disabled>↷ 다시 실행</button><span>클립 양 끝을 드래그하여 트림</span></div><div id="ghosts"></div><p id="reason"></p>

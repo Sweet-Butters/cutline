@@ -7,7 +7,7 @@ const total=()=>timeline.clips.reduce((n,c)=>n+c.out-c.in,0);
 const offset=i=>timeline.clips.slice(0,i).reduce((n,c)=>n+c.out-c.in,0);
 const fmt=n=>{n=Math.max(0,n||0);return `${Math.floor(n/60).toString().padStart(2,'0')}:${Math.floor(n%60).toString().padStart(2,'0')}`;};
 const post=(type,data={})=>vscode.postMessage({type,...data});
-function layoutReport(){post('layout',{width:innerWidth,height:innerHeight,videoHeight:video.getBoundingClientRect().height,timelineBottom:$('timeline').getBoundingClientRect().bottom,referencesBottom:$('references').hidden?null:$('references').getBoundingClientRect().bottom,chatVisible:$('chat').getBoundingClientRect().width>0});}
+function layoutReport(){post('layout',{width:innerWidth,height:innerHeight,videoHeight:video.getBoundingClientRect().height,timelineBottom:$('timeline').getBoundingClientRect().bottom,referencesBottom:$('references').hidden?null:$('references').getBoundingClientRect().bottom,checklistOpen:$('checklist').open,signalBars:document.querySelectorAll('.loudness-bar').length,chatVisible:$('chat').getBoundingClientRect().width>0});}
 window.addEventListener('resize',layoutReport);
 let chatBusy=false,chatStarted=0;
 let historyPreview=false,editBusy=false,canUndo=false,canRedo=false;
@@ -34,7 +34,7 @@ function renderReferences(items){
     const title=document.createElement('div');title.className='section-title';title.textContent=`HUMAN vs AI · ORIGINAL SOURCE TIME · ${item.name}`;host.append(title);
     const m=item.metrics,metrics=document.createElement('div');metrics.className='metrics';
     metrics.textContent=`Precision ${(m.precision*100).toFixed(1)}% · Recall ${(m.recall*100).toFixed(1)}% · F1 ${(m.f1*100).toFixed(1)}%`;
-    const durations=document.createElement('p');durations.className='durations';durations.textContent=`AI ${fmt(m.aiDuration)} · Human ${fmt(m.humanDuration)} · Overlap ${fmt(m.overlap)} | Unique kept: AI ${fmt(m.aiKept)}, Human ${fmt(m.humanKept)}`;host.append(metrics,durations);
+    const durations=document.createElement('p');durations.className='durations';durations.textContent=`AI ${fmt(m.aiDuration)} · Human ${fmt(m.humanDuration)} · Overlap ${fmt(m.overlap)} | Unique kept: AI ${fmt(m.aiKept)}, Human ${fmt(m.humanKept)}`;if(item.hasHuman!==false)host.append(metrics,durations);
     const groups=document.createElement('div');groups.className='reference-sources';host.append(groups);
     for(const source of item.sources){
       const group=document.createElement('div');group.className='source-group';groups.append(group);
@@ -45,10 +45,16 @@ function renderReferences(items){
         for(const c of source[key]){const bar=document.createElement('span');bar.className='kept';bar.style.left=`${c.in/source.duration*100}%`;bar.style.width=`${(c.out-c.in)/source.duration*100}%`;bar.title=`${name}: ${fmt(c.in)} – ${fmt(c.out)}`;strip.append(bar);}
         row.append(label,strip);group.append(row);
       }
+      const lane=document.createElement('div');lane.className='reference-row loudness-row';
+      const laneLabel=document.createElement('b');laneLabel.textContent='소리 · dBFS';
+      const strip=document.createElement('div');strip.className='source-strip loudness';strip.setAttribute('aria-label','Audio loudness on original source time');
+      for(const w of source.signals||[]){const bar=document.createElement('span');bar.className='loudness-bar';bar.style.left=`${w.start/source.duration*100}%`;bar.style.width=`${(w.end-w.start)/source.duration*100}%`;bar.style.height=`${Math.max(2,(w.db+60)/60*100)}%`;bar.style.opacity=String(.25+w.percentile/100*.75);bar.title=`${fmt(w.start)} – ${fmt(w.end)} · ${w.db.toFixed(1)} dBFS · ${w.percentile.toFixed(0)} 백분위`;strip.append(bar);}
+      if(!source.signals?.length){strip.textContent='signals 명령으로 소리 분석';strip.classList.add('missing');}
+      lane.append(laneLabel,strip);group.append(lane);
       const axis=document.createElement('div');axis.className='source-axis';for(let i=0;i<=4;i++){const tick=document.createElement('span');tick.textContent=fmt(source.duration*i/4);axis.append(tick);}group.append(axis);
     }
   }
-  post('referencesApplied',{items:items.map(i=>({name:i.name,metrics:i.metrics})),bars:host.querySelectorAll('.kept').length});
+  post('referencesApplied',{items:items.map(i=>({name:i.name,metrics:i.metrics})),bars:host.querySelectorAll('.kept').length,signalBars:host.querySelectorAll('.loudness-bar').length});requestAnimationFrame(layoutReport);
 }
 function renderStrip(d){
   $('timeline').replaceChildren();$('ghosts').replaceChildren();
@@ -162,6 +168,7 @@ window.addEventListener('message',async({data:m})=>{
     if(m.action==='click')$(m.id).click();
     if(m.action==='transcript')$('transcript').children[m.index]?.click();
     if(m.action==='version')$('versions').children[m.index]?.click();
+    if(m.action==='layout')layoutReport();
     if(m.action==='snapshot')post('snapshot',{tag:m.tag,index,time:video.currentTime,paused:video.paused,playing,seeking,banner:$('banner').textContent,width:video.videoWidth,frames:video.getVideoPlaybackQuality().totalVideoFrames,audioBytes:video.webkitAudioDecodedByteCount,version:$('version-label').textContent,transcript:$('transcript').textContent,versionCount:$('versions').children.length,error:$('error').hidden?null:$('error').textContent});
   }
 });post('ready');

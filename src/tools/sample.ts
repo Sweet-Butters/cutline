@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {run} from '../media';
 import {writeTimeline} from '../core';
+import {computeSignal} from '../signals';
 async function main(){
   const root=path.resolve(__dirname,'../..','sample-project');
   await fs.mkdir(path.join(root,'sources'),{recursive:true});await fs.mkdir(path.join(root,'transcripts'),{recursive:true});
@@ -15,6 +16,9 @@ async function main(){
     await fs.writeFile(path.join(root,'transcripts',name+'.json'),JSON.stringify(topics.map((text,j)=>({start:j*20,end:(j+1)*20,text:`[가상 대본 / 카메라 ${i}] ${text}`})),null,2)+'\n');
   }
   await writeTimeline(root,{version:1,clips:[{id:'intro',source:'sources/camera-1.mp4',in:0,out:60,reason:'원본 소개와 문제 정의'},{id:'idea',source:'sources/camera-1.mp4',in:60,out:120,reason:'아이디어 설명과 마무리'},{id:'demo',source:'sources/camera-2.mp4',in:0,out:60,reason:'두 번째 카메라의 데모 도입'},{id:'result',source:'sources/camera-2.mp4',in:60,out:120,reason:'성과와 다음 단계'}]});
+  for(let i=1;i<=2;i++)await computeSignal(root,`sources/camera-${i}.mp4`);
+  await fs.mkdir(path.join(root,'reference'),{recursive:true});
+  await fs.writeFile(path.join(root,'reference','sample-human.timeline.json'),JSON.stringify({version:1,clips:[{id:'example-1',source:'sources/camera-1.mp4',in:20,out:80,reason:'합성 UI 시연용 사람 트랙'},{id:'example-2',source:'sources/camera-2.mp4',in:40,out:100,reason:'합성 UI 시연용 사람 트랙'}]},null,2)+'\n');
   console.log(root);
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
