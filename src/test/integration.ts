@@ -3,12 +3,14 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {writeTimeline,readTimeline} from '../core';
+import {checkProject,hash} from '../check';
 async function until<T>(fn:()=>T,description:string,timeout=180000):Promise<NonNullable<T>>{
   const start=Date.now();while(Date.now()-start<timeout){const result=fn();if(result)return result as NonNullable<T>;await new Promise(r=>setTimeout(r,100));}throw Error(`Timed out: ${description}`);
 }
 export async function run(){
   const root=process.env.CUTLINE_TEST_ROOT!,sample=path.join(root,'sample-project'),file=path.join(sample,'timeline.json');
   const original=await fs.readFile(file,'utf8');
+  const styleFile=path.join(sample,'style.md'),originalStyle=await fs.readFile(styleFile,'utf8');
   const logFile=path.join(sample,'.cutline/edit-log.jsonl');const oldLog=await fs.readFile(logFile).catch(()=>undefined);
   const referenceFile=path.join(sample,'reference','integration.timeline.json');await fs.mkdir(path.dirname(referenceFile),{recursive:true});await fs.writeFile(referenceFile,original);
   const extension=vscode.extensions.getExtension('cutline-local.cutline');assert.ok(extension);const api=await extension.activate();
@@ -27,12 +29,23 @@ export async function run(){
     const canplay=await until(()=>api.events.find((e:any)=>e.type==='playback'&&e.event==='canplay'),'proxy canplay',30000);assert.ok(metadata.duration>119);
     await api.codecProbe('sources/camera-1.mp4');const codec=await until(()=>api.events.find((e:any)=>e.type==='codecResult'),'H264/AAC runtime probe',20000);
     const t=await readTimeline(sample);t.clips.splice(1,1);t.clips[0].out=30;t.clips.push({id:'new-hook',source:'sources/camera-2.mp4',in:90,out:100,reason:'테스트: 핵심만 선택'});
+    const initialCheck=await until(()=>api.events.find((e:any)=>e.type==='checklistApplied'),'initial checklist');
+    assert.deepEqual(initialCheck.results,(await checkProject(sample,await readTimeline(sample))).results);
+    assert.equal(initialCheck.results.find((r:any)=>r.id==='creative-review').status,'미평가');
+    await fs.writeFile(styleFile,'```cutline-style\n{"clipLengthMedian":[60,60],"clipLengthIQR":[60,60],"keepRatio":[1,1]}\n```');
+    await until(()=>api.events.some((e:any)=>e.type==='checklistApplied'&&e.results.find((r:any)=>r.id==='clip-distribution')?.status==='PASS'),'style-only save rechecks');
+    await fs.writeFile(styleFile,originalStyle);
     const changedAt=Date.now();await writeTimeline(sample,t);
     const applied=await until(()=>api.events.find((e:any)=>e.type==='applied'&&e.diff?.added?.some((c:any)=>c.id==='new-hook')),'webview acknowledged live diff');
     const diffLatencyMs=Date.now()-changedAt;
     await until(()=>api.events.some((e:any)=>e.type==='referencesApplied'&&e.items.some((i:any)=>i.name==='integration.timeline.json'&&i.metrics.aiDuration===160&&i.metrics.f1<1)),'reference metrics update live');
     assert.equal(applied.diff.added.length,1);assert.equal(applied.diff.removed.length,1);assert.equal(applied.diff.trimmed.length,1);assert.equal(applied.diff.before,240);assert.equal(applied.diff.after,160);assert.equal(applied.ghosts,1);assert.equal(applied.blocks,4);assert.match(applied.banner,/04:00 → 02:40/);
+    const changedCheck=await until(()=>api.events.find((e:any)=>e.type==='checklistApplied'&&e.timelineHash===hash(JSON.stringify(t))),'live checklist revision');
+    assert.equal(changedCheck.results.find((r:any)=>r.id==='duration').status,'FAIL');
+    assert.equal(changedCheck.results.find((r:any)=>r.id==='transcript-cuts').status,'WARN');
     const snapshot=async(tag:string)=>{await api.testAction('snapshot',{tag});return until(()=>api.events.find((e:any)=>e.type==='snapshot'&&e.tag===tag),tag,10000);};
+    await api.testAction('checkSeek',{rule:'transcript-cuts'});await new Promise(r=>setTimeout(r,500));
+    const checkSeek=await snapshot('check-seek');assert.equal(checkSeek.index,0);assert.ok(checkSeek.time>29&&checkSeek.time<=30);
     await api.testAction('transcript',{index:1});await new Promise(r=>setTimeout(r,500));const transcript=await snapshot('transcript-seek');assert.ok(transcript.time>=20&&transcript.time<21);assert.match(transcript.transcript,/문제/);
     await api.testAction('select',{index:0,time:29.7});await new Promise(r=>setTimeout(r,300));await api.testAction('play',{muted:true});
     // Wait for decoded frames across the cut, including on a busy build machine.
@@ -60,6 +73,9 @@ export async function run(){
     await until(()=>api.events.slice(editStart).some((e:any)=>e.type==='applied'&&e.diff?.removed?.some((c:any)=>c.id==='intro')),'manual delete diff');
     const editLog=(await fs.readFile(logFile,'utf8')).trim().split('\n').map(line=>JSON.parse(line));
     assert.deepEqual(editLog.slice(-5).map(e=>e.action),['split','undo','redo','trim','delete']);assert.ok(editLog.slice(-5).every(e=>e.who==='human'));
+    const bad=await readTimeline(sample);bad.clips[0].out=130;await writeTimeline(sample,bad);
+    await until(()=>api.events.some((e:any)=>e.type==='checklistApplied'&&e.timelineHash===hash(JSON.stringify(bad))&&e.results.some((r:any)=>r.id==='source-bounds'&&r.status==='FAIL')),'bounds FAIL visible');
+    await until(()=>api.events.some((e:any)=>e.type==='sent'&&e.message.timeline.clips[0].out===130),'invalid bounds timeline remains inspectable');
     // Invalid JSON must keep the last valid panel rather than applying an empty state.
     const sentBefore=api.events.filter((e:any)=>e.type==='sent').length;await fs.writeFile(file,'{"version":');await new Promise(r=>setTimeout(r,700));assert.equal(api.events.filter((e:any)=>e.type==='sent').length,sentBefore);
     api.dispose();
@@ -77,7 +93,7 @@ export async function run(){
       try {assert.equal(await api.testAutoOpen(),false,'No timeline means no automatic panel');}
       finally {await fs.rename(file+'.test-backup',file);}
     } finally {await config.update('autoOpenPanel',oldSetting,vscode.ConfigurationTarget.Global);}
-    const report={autoOpen:true,optOut:true,manualOpenWithOptOut:true,noTimeline:true,vscode:vscode.version,extensionPath:extension.extensionPath,diffLatencyMs,proxy:{format:applied.format,metadata,canplay,playback},webmErrors:api.events.filter((e:any)=>e.type==='playback'&&e.event==='error'),h264:codec,diff:applied,transcript,preview,comparison,beside:true,invalidJsonPreservesPanel:true};
+    const report={checklist:{initial:initialCheck.summary,changed:changedCheck.summary,seek:checkSeek,boundsFail:true},autoOpen:true,optOut:true,manualOpenWithOptOut:true,noTimeline:true,vscode:vscode.version,extensionPath:extension.extensionPath,diffLatencyMs,proxy:{format:applied.format,metadata,canplay,playback},webmErrors:api.events.filter((e:any)=>e.type==='playback'&&e.event==='error'),h264:codec,diff:applied,transcript,preview,comparison,beside:true,invalidJsonPreservesPanel:true};
     await fs.writeFile(path.join(root,'.test-data','integration-report.json'),JSON.stringify(report,null,2));console.log('CUTLINE INTEGRATION PASSED',JSON.stringify(report));
-  }finally{if(oldLog)await fs.writeFile(logFile,oldLog);else await fs.rm(logFile,{force:true});await fs.rm(referenceFile,{force:true});await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
+  }finally{await fs.writeFile(styleFile,originalStyle);if(oldLog)await fs.writeFile(logFile,oldLog);else await fs.rm(logFile,{force:true});await fs.rm(referenceFile,{force:true});await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
 }

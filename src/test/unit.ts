@@ -1,3 +1,4 @@
+import './check-unit';
 import {test} from 'node:test';
 import './agent-unit';
 import * as assert from 'node:assert/strict';

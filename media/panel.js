@@ -93,7 +93,8 @@ function select(i,at){
     if(target===0&&video.currentTime===0){seeking=false;if(playing)video.play().catch(()=>{});}
     update();
   };
-  if(video.getAttribute('src')!==proxies[c.source]){video.onloadedmetadata=()=>{post('playback',{event:'loadedmetadata',revision,source:c.source,duration:video.duration,width:video.videoWidth,height:video.videoHeight});seek();};video.src=proxies[c.source];video.load();}else seek();
+  if(!proxies[c.source]){video.removeAttribute('src');video.load();seeking=false;banner('원본을 재생할 수 없습니다. 검증표를 확인하세요.');}
+  else if(video.getAttribute('src')!==proxies[c.source]){video.onloadedmetadata=()=>{post('playback',{event:'loadedmetadata',revision,source:c.source,duration:video.duration,width:video.videoWidth,height:video.videoHeight});seek();};video.src=proxies[c.source];video.load();}else seek();
   $('clip').textContent=`${i+1} / ${timeline.clips.length} · ${c.id}`;$('reason').textContent=c.reason||'';
   [...$('timeline').children].forEach((b,j)=>b.classList.toggle('active',j===index));renderTranscript();
 }
@@ -113,6 +114,8 @@ $('previous').onclick=()=>select(Math.max(0,index-1));$('next').onclick=()=>sele
 $('scrub').oninput=()=>{let n=Number($('scrub').value);for(let i=0;i<timeline.clips.length;i++){const c=timeline.clips[i],d=c.out-c.in;if(n<d||i===timeline.clips.length-1){select(i,c.in+n);break;}n-=d;}};
 for(const type of ['current','compare','restore','export'])$(type).onclick=()=>post(type);$('refresh').onclick=()=>post('versions');
 window.addEventListener('message',async({data:m})=>{
+  if(m.type==='checklistUnavailable'){$('check-summary').textContent='검증 미완료 · timeline / 입력 오류';$('check-results').replaceChildren();}
+  if(m.type==='checklist')renderChecklist(m.report);
   if(m.type==='focusChat')$('prompt').focus();
   if(m.type==='chatInit'){$('backend').value=m.backend;for(const text of m.prompts||[]){const b=document.createElement('button');b.type='button';b.textContent=text;b.onclick=()=>{$('prompt').value=text;$('prompt').focus();};$('chips').append(b);}post('chatReady');}
   if(m.type==='chatEvent'){
@@ -150,6 +153,7 @@ window.addEventListener('message',async({data:m})=>{
     probe.oncanplay=()=>finish({decoded:true});probe.onerror=()=>finish({decoded:false,code:probe.error?.code,message:probe.error?.message});probe.src=m.url;probe.load();setTimeout(()=>finish({decoded:false,timeout:true}),15000);
   }
   if(m.type==='testAction'){
+    if(m.action==='checkSeek')document.querySelector(`[data-rule="${m.rule}"] button`)?.click();
     if(m.action==='chat'){$('backend').value=m.backend;$('prompt').value=m.prompt;$('chat-form').requestSubmit();}
     if(m.action==='resetChat'){$('backend').value=m.backend;$('backend').onchange();$('new-chat').click();}
     if(m.action==='manual')manual(m.edit,m.data||{});
@@ -161,3 +165,17 @@ window.addEventListener('message',async({data:m})=>{
     if(m.action==='snapshot')post('snapshot',{tag:m.tag,index,time:video.currentTime,paused:video.paused,playing,seeking,banner:$('banner').textContent,width:video.videoWidth,frames:video.getVideoPlaybackQuality().totalVideoFrames,audioBytes:video.webkitAudioDecodedByteCount,version:$('version-label').textContent,transcript:$('transcript').textContent,versionCount:$('versions').children.length,error:$('error').hidden?null:$('error').textContent});
   }
 });post('ready');
+
+function renderChecklist(report){
+  $('check-summary').textContent=report.summary;
+  const host=$('check-results');host.replaceChildren();
+  for(const r of report.results){
+    const row=document.createElement('div');row.className='check-row '+r.status;row.dataset.rule=r.id;
+    const title=document.createElement('span');title.textContent=`${r.status} · ${r.kind} · ${r.message}`;
+    title.title=`${r.id} | 기대: ${JSON.stringify(r.expected)} | 실제: ${JSON.stringify(r.actual)}`;row.append(title);
+    const details=document.createElement('small');details.textContent=`기대 ${JSON.stringify(r.expected)} · 실제 ${JSON.stringify(r.actual)}`;row.append(details);
+    for(const o of r.offending){const b=document.createElement('button');b.textContent=`${o.clipId} ${o.start.toFixed(1)}–${o.end.toFixed(1)}s`;b.onclick=()=>{const i=timeline.clips.findIndex(c=>c.id===o.clipId&&c.source===o.source);if(i>=0){playing=false;select(i,o.start);$('timeline').children[i]?.scrollIntoView({block:'nearest'});}else banner('현재 재생 가능한 타임라인에 없는 클립입니다. 원본 범위를 수정하세요.');};row.append(b);}
+    host.append(row);
+  }
+  post('checklistApplied',{summary:report.summary,timelineHash:report.timelineHash,results:report.results});
+}

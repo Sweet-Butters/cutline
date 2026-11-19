@@ -14,6 +14,10 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public class CutlineWindow {
+ [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left,Top,Right,Bottom; }
+ [StructLayout(LayoutKind.Sequential)] public struct Point { public int X,Y; }
+ [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hwnd,out Rect rect);
+ [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hwnd,ref Point point);
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd,int command);
  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
@@ -45,15 +49,19 @@ try {
  [CutlineWindow]::SetWindowPos($window.MainWindowHandle,[IntPtr](-1),($area.X+20),($area.Y+20),($area.Width-40),($area.Height-40),0x40) | Out-Null
  [CutlineWindow]::SetForegroundWindow($window.MainWindowHandle) | Out-Null
  Start-Sleep -Seconds 3
+ $checklist=$logs | Select-String '"type":"checklistApplied"' | Select-Object -Last 1
  $proxyWorkers=@(Get-CimInstance Win32_Process -Filter "Name = 'ffmpeg.exe'" | Where-Object {$_.CommandLine -like '*verification-cache*' -and $_.CreationDate -ge $started})
- $screen=[Windows.Forms.Screen]::FromHandle($window.MainWindowHandle).Bounds
+ $rect=New-Object CutlineWindow+Rect
+ $origin=New-Object CutlineWindow+Point
+ if(![CutlineWindow]::GetClientRect($window.MainWindowHandle,[ref]$rect) -or ![CutlineWindow]::ClientToScreen($window.MainWindowHandle,[ref]$origin)){throw "Cannot locate app client area"}
+ $screen=New-Object Drawing.Rectangle($origin.X,$origin.Y,($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
  $bitmap=New-Object Drawing.Bitmap $screen.Width,$screen.Height
  $graphics=[Drawing.Graphics]::FromImage($bitmap)
  try {
   $graphics.CopyFromScreen($screen.Location,[Drawing.Point]::Empty,$screen.Size)
   $bitmap.Save("$PSScriptRoot/screenshots/$Screenshot",[Drawing.Imaging.ImageFormat]::Png)
  }finally{$graphics.Dispose();$bitmap.Dispose()}
- @{title=$window.MainWindowTitle;pid=$window.Id;executable=$window.Path;started=$started.ToString('o');canplay=$canplay.Line;comparison=$comparison.Line;cache=$env:CUTLINE_CACHE_ROOT;proxyWorkerCount=$proxyWorkers.Count;screenshot="app/screenshots/$Screenshot"} | ConvertTo-Json | Set-Content "$PSScriptRoot/screenshots/$Screenshot.json" -Encoding UTF8
+ @{title=$window.MainWindowTitle;pid=$window.Id;executable=$window.Path;started=$started.ToString('o');canplay=$canplay.Line;comparison=$comparison.Line;checklist=$checklist.Line;cache=$env:CUTLINE_CACHE_ROOT;proxyWorkerCount=$proxyWorkers.Count;screenshot="app/screenshots/$Screenshot"} | ConvertTo-Json | Set-Content "$PSScriptRoot/screenshots/$Screenshot.json" -Encoding UTF8
  Get-Content "$PSScriptRoot/screenshots/$Screenshot.json"
 }finally{
  # No global taskkill: only the bundle that was absent before this launch.

@@ -1,0 +1,198 @@
+{
+  "checklist": {
+    "initial": "검증 8/9 통과 · 경고 1 · 실패 0 · 미평가 1",
+    "changed": "검증 6/9 통과 · 경고 2 · 실패 1 · 미평가 1",
+    "seek": {
+      "type": "snapshot",
+      "tag": "check-seek",
+      "index": 0,
+      "time": 29.999,
+      "paused": true,
+      "playing": false,
+      "seeking": false,
+      "banner": "Timeline changed: +1 / −1 clips · 1 trimmed · 0 moved · 04:00 → 02:40",
+      "width": 640,
+      "frames": 227,
+      "audioBytes": 117216,
+      "version": "Current working file",
+      "transcript": "00:00[가상 대본 / 카메라 1] 소개와 오늘의 질문00:20[가상 대본 / 카메라 1] 문제: 영상 편집의 반복 작업",
+      "versionCount": 1,
+      "error": null
+    },
+    "boundsFail": true
+  },
+  "autoOpen": true,
+  "optOut": true,
+  "manualOpenWithOptOut": true,
+  "noTimeline": true,
+  "vscode": "1.145.3",
+  "extensionPath": "D:\\orca\\projects\\video-ide",
+  "diffLatencyMs": 1476,
+  "proxy": {
+    "format": "mp4",
+    "metadata": {
+      "type": "playback",
+      "event": "loadedmetadata",
+      "revision": 2,
+      "source": "sources/camera-1.mp4",
+      "duration": 120,
+      "width": 640,
+      "height": 360
+    },
+    "canplay": {
+      "type": "playback",
+      "event": "canplay",
+      "revision": 2,
+      "source": "sources/camera-1.mp4"
+    },
+    "playback": {
+      "type": "snapshot",
+      "tag": "cross-source-playback-1",
+      "index": 1,
+      "time": 0.099389,
+      "paused": false,
+      "playing": true,
+      "seeking": false,
+      "banner": "Timeline changed: +1 / −1 clips · 1 trimmed · 0 moved · 04:00 → 02:40",
+      "width": 640,
+      "frames": 7,
+      "audioBytes": 4896,
+      "version": "Current working file",
+      "transcript": "00:00[가상 대본 / 카메라 2] 소개와 오늘의 질문00:20[가상 대본 / 카메라 2] 문제: 영상 편집의 반복 작업00:40[가상 대본 / 카메라 2] 핵심 아이디어: 에이전트가 타임라인을 편집",
+      "versionCount": 1,
+      "error": null
+    }
+  },
+  "webmErrors": [
+    {
+      "type": "playback",
+      "event": "error",
+      "revision": 1,
+      "message": "PipelineStatus::DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed"
+    }
+  ],
+  "h264": {
+    "type": "codecResult",
+    "decoded": true,
+    "url": "https://file%2B.vscode-resource.vscode-cdn.net/D%3A/orca/projects/video-ide/sample-project/sources/camera-1.mp4",
+    "width": 640,
+    "height": 360,
+    "canPlayType": "",
+    "webmType": "probably",
+    "mp3Type": "probably"
+  },
+  "diff": {
+    "type": "applied",
+    "revision": 3,
+    "diff": {
+      "added": [
+        {
+          "id": "new-hook",
+          "source": "sources/camera-2.mp4",
+          "in": 90,
+          "out": 100,
+          "reason": "테스트: 핵심만 선택"
+        }
+      ],
+      "removed": [
+        {
+          "id": "idea",
+          "source": "sources/camera-1.mp4",
+          "in": 60,
+          "out": 120,
+          "reason": "아이디어 설명과 마무리"
+        }
+      ],
+      "trimmed": [
+        {
+          "id": "intro",
+          "source": "sources/camera-1.mp4",
+          "in": 0,
+          "out": 30,
+          "reason": "원본 소개와 문제 정의"
+        }
+      ],
+      "moved": [],
+      "changed": [],
+      "before": 240,
+      "after": 160
+    },
+    "format": "mp4",
+    "clipCount": 4,
+    "banner": "Timeline changed: +1 / −1 clips · 1 trimmed · 0 moved · 04:00 → 02:40",
+    "blocks": 4,
+    "ghosts": 1
+  },
+  "transcript": {
+    "type": "snapshot",
+    "tag": "transcript-seek",
+    "index": 0,
+    "time": 20,
+    "paused": true,
+    "playing": false,
+    "seeking": false,
+    "banner": "Timeline changed: +1 / −1 clips · 1 trimmed · 0 moved · 04:00 → 02:40",
+    "width": 640,
+    "frames": 461,
+    "audioBytes": 236160,
+    "version": "Current working file",
+    "transcript": "00:00[가상 대본 / 카메라 1] 소개와 오늘의 질문00:20[가상 대본 / 카메라 1] 문제: 영상 편집의 반복 작업",
+    "versionCount": 1,
+    "error": null
+  },
+  "preview": {
+    "type": "snapshot",
+    "tag": "version-preview",
+    "index": 2,
+    "time": 0.208373,
+    "paused": true,
+    "playing": false,
+    "seeking": false,
+    "banner": "4 clips · 04:00 · Version preview",
+    "width": 640,
+    "frames": 18,
+    "audioBytes": 11808,
+    "version": "Preview: 0c6d91da",
+    "transcript": "00:00[가상 대본 / 카메라 2] 소개와 오늘의 질문00:20[가상 대본 / 카메라 2] 문제: 영상 편집의 반복 작업00:40[가상 대본 / 카메라 2] 핵심 아이디어: 에이전트가 타임라인을 편집",
+    "versionCount": 1,
+    "error": null
+  },
+  "comparison": {
+    "type": "comparisonApplied",
+    "diff": {
+      "added": [
+        {
+          "id": "new-hook",
+          "source": "sources/camera-2.mp4",
+          "in": 90,
+          "out": 100,
+          "reason": "테스트: 핵심만 선택"
+        }
+      ],
+      "removed": [
+        {
+          "id": "idea",
+          "source": "sources/camera-1.mp4",
+          "in": 60,
+          "out": 120,
+          "reason": "아이디어 설명과 마무리"
+        }
+      ],
+      "trimmed": [
+        {
+          "id": "intro",
+          "source": "sources/camera-1.mp4",
+          "in": 0,
+          "out": 30,
+          "reason": "원본 소개와 문제 정의"
+        }
+      ],
+      "moved": [],
+      "changed": [],
+      "before": 240,
+      "after": 160
+    }
+  },
+  "beside": true,
+  "invalidJsonPreservesPanel": true
+}

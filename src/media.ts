@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {spawn,ChildProcess} from 'node:child_process';
 import {Timeline, sourcePath, validate} from './core';
+import {checkProject,hardFailures} from './check';
 const children=new Set<ChildProcess>();
 export function stopMediaWorkers(){for(const child of children)child.kill();}
 process.once('exit',stopMediaWorkers);
@@ -89,7 +90,10 @@ async function buildProxy(root:string,source:string,format:ProxyFormat,progress:
     } finally {await fs.rm(temp,{force:true});}
   }));
 }
-export async function exportTimeline(root:string,t:Timeline):Promise<string> {
+export async function exportTimeline(root:string,t:Timeline,confirm?:(report:Awaited<ReturnType<typeof checkProject>>)=>Promise<boolean>):Promise<string> {
+  t=structuredClone(t);
+  const report=await checkProject(root,t);
+  if(hardFailures(report.results)&&!(await confirm?.(report)))throw Error('hard FAIL: 검증표 확인 후 내보내기를 승인하세요 (CLI: export --allow-hard-fail)');
   const meta=await validateMedia(root,t);
   if(!t.clips.length) throw Error('Cannot export an empty timeline');
   return serial(()=>locked(root,async()=>{
@@ -106,6 +110,7 @@ export async function exportTimeline(root:string,t:Timeline):Promise<string> {
       }
       await fs.writeFile(path.join(temp,'list.txt'),t.clips.map((_,i)=>`file '${i}.mp4'`).join('\n'));
       await run('ffmpeg',['-nostdin','-v','error','-y','-f','concat','-safe','1','-i',path.join(temp,'list.txt'),'-c','copy','-movflags','+faststart',output]);
+      await fs.writeFile(output.replace(/\.mp4$/,'.report.json'),JSON.stringify({...report,exportedAt:new Date().toISOString(),hardFailOverride:hardFailures(report.results)},null,2)+'\n');
       return output;
     } catch(e) {await fs.rm(output,{force:true});throw e;} finally {await fs.rm(temp,{recursive:true,force:true});}
   }));

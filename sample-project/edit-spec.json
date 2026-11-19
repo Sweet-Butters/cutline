@@ -1,0 +1,15 @@
+{
+  "version": "demo-1",
+  "targetDuration": [
+    180,
+    250
+  ],
+  "minClipLength": 2,
+  "maxClipLength": 65,
+  "requiredKeywords": [
+    "핵심"
+  ],
+  "forbiddenKeywords": [
+    "광고"
+  ]
+}

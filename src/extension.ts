@@ -1,3 +1,4 @@
+import {checkProject} from './check';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -52,6 +53,7 @@ export function activate(context:vscode.ExtensionContext) {
     finally{
       finishing=true;
       try{await editQueue.catch(()=>{});const final=await readTimeline(root);await validateMedia(root,final);await captureAgent(final);}catch(e){await chat({kind:'error',text:String(e)});}
+      try{await chat({kind:'step',text:(await checkProject(root,await readTimeline(root))).summary});}catch(e){await chat({kind:'error',text:'검증 미완료: '+String(e)});}
       agent=undefined;agentBefore=undefined;finishing=false;
       await chat({kind:'done',elapsedMs:Date.now()-started});await send({type:'editState',...edits.state});
       void reload();
@@ -80,13 +82,15 @@ export function activate(context:vscode.ExtensionContext) {
   async function display(t:Timeline,diff?:ReturnType<typeof diffTimeline>,version?:string) {
     const token=++revision;
     await send({type:'status',message:'Checking sources and preparing playback proxies…'});
-    await validateMedia(root,t);
+    const checklist=await checkProject(root,t);
+    if(token!==revision)return;
+    await send({type:'checklist',report:checklist});
     const proxies:Record<string,string>={};
     for(const source of new Set(t.clips.map(c=>c.source))) {
       if(token!==revision)return;
-      const file=await ensureProxy(root,source,proxyFormat,message=>{if(token===revision)void send({type:'status',message:`${source} · ${message}`});});
+      try{const file=await ensureProxy(root,source,proxyFormat,message=>{if(token===revision)void send({type:'status',message:`${source} · ${message}`});});
       if(!panel)return;
-      proxies[source]=panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();
+      proxies[source]=panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();}catch(e){if(token===revision)await fail(e);}
     }
     const text=await transcripts(root);
     if(token!==revision||!panel)return;
@@ -99,7 +103,10 @@ export function activate(context:vscode.ExtensionContext) {
     const request=++loadRequest;
     try {
       const next=await readTimeline(root);
-      await validateMedia(root,next);
+      const checklist=await checkProject(root,selected&&shown?shown:next);
+      if(request!==loadRequest)return;
+      await send({type:'checklist',report:checklist});
+      try{await validateMedia(root,next);}catch(e){if(!selected)await display(next);await fail(e);return;}
       if(request!==loadRequest)return;
       const old=shown;current=next;
       await send({type:'clearError'});
@@ -112,7 +119,7 @@ export function activate(context:vscode.ExtensionContext) {
       if(selected) {await send({type:'status',message:'Current file changed. Viewing history; choose Current to return.'});await listVersions();return;}
       if(!old||shownVersion||!same(old,next))await display(next,old?diffTimeline(old,next):undefined);
       else await listVersions();
-    } catch(e) {if(request===loadRequest)await fail(e);}
+    } catch(e) {if(request===loadRequest){await send({type:'checklistUnavailable'});await fail(e);}}
   }
   async function open(folder?:string) {
     if(panel){panel.reveal(vscode.ViewColumn.One);return;}
@@ -127,11 +134,14 @@ export function activate(context:vscode.ExtensionContext) {
     watchers.push(watch,watch.onDidChange(schedule),watch.onDidCreate(schedule),watch.onDidDelete(schedule));
     const tw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'transcripts/**/*.json'));
     watchers.push(tw,tw.onDidChange(schedule),tw.onDidCreate(schedule),tw.onDidDelete(schedule));
+    const sw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'{edit-spec.json,style.md,sources/**}'));
+    watchers.push(sw,sw.onDidChange(schedule),sw.onDidCreate(schedule),sw.onDidDelete(schedule));
     const rw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'reference/*.timeline.json'));
     watchers.push(rw,rw.onDidChange(schedule),rw.onDidCreate(schedule),rw.onDidDelete(schedule));
     panel.webview.onDidReceiveMessage(async m=>{
       record(m);
       if(m.type==='playback')output.info(JSON.stringify({root,...m}));
+      if(m.type==='checklistApplied')output.info(JSON.stringify({root,...m}));
       if(m.type==='referencesApplied')output.info(JSON.stringify({root,...m}));
       if(m.type==='layout')output.info(JSON.stringify({root,...m}));
       try {
@@ -169,7 +179,7 @@ export function activate(context:vscode.ExtensionContext) {
   }
   async function doExport() {
     const folder=root||await getRoot();
-    const file=await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:`${BRAND}: Exporting originals`},()=>readTimeline(folder).then(t=>exportTimeline(folder,t)));
+    const file=await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:`${BRAND}: Exporting originals`},()=>readTimeline(folder).then(t=>exportTimeline(folder,t,async report=>(await vscode.window.showWarningMessage(report.summary+'\n필수 검증 FAIL이 있습니다. 그래도 내보낼까요?',{modal:true},'내보내기'))==='내보내기')));
     void vscode.window.showInformationMessage(`Exported: ${file}`);await send({type:'status',message:`Exported: ${file}`});
   }
   context.subscriptions.push(vscode.commands.registerCommand('cutline.open',()=>open().catch(e=>vscode.window.showErrorMessage(String(e)))),
@@ -219,7 +229,7 @@ function html(webview:vscode.Webview,uri:vscode.Uri) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};"><link rel="stylesheet" href="${style}"></head><body>
   <header><b>${BRAND}</b><span class="badge">AGENT VIDEO WORKSPACE</span><button id="export">Export MP4</button></header>
   <div class="workspace"><aside id="chat" aria-label="Agent chat"><div class="chat-heading"><b>편집 에이전트</b><select id="backend" aria-label="Agent backend"><option value="claude">Claude</option><option value="codex">Codex</option></select><button id="new-chat" title="새 대화">＋</button></div><p class="chat-hint">원하는 편집을 말해 주세요.<br>내 구독으로 편집하고, 변경은 영상에 바로 반영됩니다.</p><div id="messages" role="log" aria-live="polite"></div><div id="chips"></div><form id="chat-form"><textarea id="prompt" aria-label="편집 요청" placeholder="어떤 영상을 만들까요?" rows="3" maxlength="20000"></textarea><div class="chat-actions"><span id="elapsed">준비됨</span><button id="stop" type="button" disabled>중단</button><button id="send" type="submit">보내기 ↑</button></div></form></aside><div class="video-workspace"><div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
-  <main><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
+  <main><details id="checklist" open><summary id="check-summary">검증 중…</summary><div id="check-results"></div></details><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
   <div class="transport"><button id="play">▶ Play</button><button id="previous">⏮</button><button id="next">⏭</button><span id="time">00:00 / 00:00</span><span id="clip"></span></div>
   <input id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Timeline position">
   <div class="section-title">EDIT ORDER <span>green added · red removed · amber trimmed · blue moved</span></div><div id="timeline" tabindex="0" aria-label="편집 순서 타임라인"></div><div class="edit-tools"><button id="split">분할 S</button><button id="delete">삭제 Del</button><button id="undo" disabled>↶ 되돌리기</button><button id="redo" disabled>↷ 다시 실행</button><span>클립 양 끝을 드래그하여 트림</span></div><div id="ghosts"></div><p id="reason"></p>

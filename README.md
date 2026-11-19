@@ -206,3 +206,28 @@ Claude Code / Codex CLI를 설치하고 각 CLI의 구독 계정으로 미리 �
 `.cutline/edit-log.jsonl`에는 `who: human|agent`, `action`, `clipIds`, `before`, `after`, `at`을 한 편집당 한 줄 기록합니다. 수동 분할·삭제·트림·undo·redo는 즉시 timeline.json에 저장됩니다. 원본 길이를 벗어난 트림은 거부합니다. 에이전트 실행 중이나 과거 버전 프리뷰에서는 수동 편집을 잠급니다. 대본 입력 중에는 편집 단축키를 가로채지 않습니다. 분할은 원본 기준 재생 위치를 사용하며 프레임 단위 NLE 정밀도를 보장하지 않습니다.
 
 `npm run test:agents`는 샘플 **복사본**에서 실제 구독 CLI를 채팅 폼 → webview 메시지 → 확장 경로로 실행합니다. 인증 파일을 `.test-data/real-agent` 아래에 잠시 복사하고 종료 시 지웁니다. 프로젝트, 로그, 세션은 git-ignored `.test-data/`에만 남습니다. `CUTLINE_TEST_SANDBOX=workspace-write`로 제한 모드 재검증이 가능합니다. 실측 결과는 [VERIFICATION.md](VERIFICATION.md)를 참고하세요. Codex 비대화형 JSON/재개 인터페이스는 [공식 문서](https://developers.openai.com/codex/noninteractive)와 설치된 CLI 도움말을 확인했습니다.
+
+
+## 내보내기 전 편집 검증표
+
+패널 위의 접이식 검증표는 타임라인 저장·수동 편집·되돌리기, `edit-spec.json`, `style.md`, 대본·원본 변경에 맞춰 갱신됩니다. PASS / WARN / FAIL / 미평가를 구분하고 **미평가를 통과 수나 평가 분모에 넣지 않습니다**. 항목의 기대값·실측값과 클립/원본 초 구간을 표시하며 구간 버튼으로 해당 클립을 선택하고 이동합니다. 버전 프리뷰에서는 표시 중인 타임라인을 현재 사양으로 검사합니다. 에이전트 턴이 끝나면 현재 저장본의 검증 요약도 채팅에 추가됩니다.
+
+```powershell
+node tools/vidcli.js --project sample-project check
+node tools/vidcli.js --project sample-project check --json
+```
+
+CLI와 패널, 내보내기는 같은 검증 엔진을 사용합니다. `check`는 hard FAIL이면 종료 코드 1, 그 외에는 0입니다. WARN/미평가는 완벽한 편집을 의미하지 않습니다. `sample-project/AGENTS.md`와 `CLAUDE.md`에 두 입력의 JSON Schema와 에이전트 작업 지침이 있습니다.
+
+- `edit-spec.json`(선택): `version`, `targetDuration: [최소초, 최대초]`, `minClipLength`, `maxClipLength`, `requiredKeywords`, `forbiddenKeywords`.
+- `style.md`의 `cutline-style` JSON 블록(선택): `version`, `targetDuration`, `clipLengthMedian`, `clipLengthIQR`, `maxOutsideIQRShare`, `keepRatio`. 샘플 수치는 수동 데모 기준이며 자동 학습 결과가 아닙니다. 사양의 목표 길이가 스타일 목표보다 우선합니다.
+- 원본 범위를 벗어나거나 파일이 없으면 hard FAIL(컨테이너 길이 오차 0.025초 허용). 같은 원본의 `(총 재생 초 − 구간 합집합 초) / 총 재생 초`가 **50% 초과**면 WARN입니다. 50% 이하는 PASS이며 중복이 전혀 없다는 뜻은 아닙니다.
+- 목표 길이·개별 클립 길이·키워드는 hard 규칙입니다. 범위 양끝을 포함합니다. 대본과 겹치는 구간의 텍스트를 대소문자 구분 없이 부분 문자열로 검사합니다. 단어별 타임코드가 없으므로 클립이 문장 일부만 포함해도 그 문장의 키워드가 포함된 것으로 봅니다.
+- 분포는 중앙값과 채널 IQR 밖 클립 비율을 검사합니다. 기본 이탈 비율 상한은 0.5이며 하나라도 벗어나면 WARN입니다. 두 범위가 모두 있어야 평가합니다.
+- 컷이 대본 구간 양끝에서 각각 0.5초보다 깊게 들어가면 WARN입니다. 누락/빈 대본은 미평가(이미 확인된 중간 컷이 있으면 WARN과 불완전 여부 표시)입니다.
+- 유지율은 **고유 유지 초 / 프로젝트 sources 아래 전체 원본 초**입니다. 참조되지 않은 원본도 분모에 포함합니다. 지원 확장자는 mp4/mov/mkv/webm/avi/m4v이며 타임라인이 참조한 다른 확장자도 검사합니다. 원본 길이 확보 실패 시 미평가입니다.
+- 유머 타이밍/채널다움은 항상 미평가 · 창작자 확인 필요입니다. 잘못된 사양은 입력 오류로 노출하며 edit-spec은 FAIL, style은 WARN입니다. JSON 구조가 잘못된 timeline은 검증 미완료로 표시합니다.
+
+내보내기 직전에 다시 검사하며 hard FAIL이 있으면 확인창을 띄웁니다. CLI는 기본적으로 중단하고, 사용자가 결과를 확인한 뒤 `export --allow-hard-fail`로 명시적으로 승인할 수 있습니다. 승인해도 원본 범위 오류처럼 렌더링 불가능한 타임라인은 기존 미디어 검사가 차단합니다. 성공한 MP4 옆에 같은 이름의 `.report.json`을 기록합니다. 보고서에는 검사한 타임라인의 SHA-256(JSON.stringify 직렬화), spec/style 원문 SHA-256 및 명시 버전, 엔진 버전, 전체 결과, 요약, FAIL 승인 여부가 담깁니다. 렌더 중 timeline/spec 파일이 바뀌어도 보고서는 내보내기에 전달한 스냅샷을 설명합니다. 원본 미디어 자체의 동시 변경까지 고정하는 기능은 없습니다.
+
+샘플 초기 검증은 `검증 8/9 통과 · 경고 1 · 실패 0 · 미평가 1`입니다. 실제 번들 화면: [검증표 스크린샷](app/screenshots/cutline-check.png).

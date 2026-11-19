@@ -5,3 +5,28 @@
 각 클립의 reason에 선택·제거·트림 이유를 짧은 한국어 문장으로 기록한다.
 요청한 길이에 가능한 가깝게 맞추되 원본 범위를 넘지 않는다. 장면 전환은 하드 컷이다.
 샘플 영상은 테스트 패턴과 톤이다. 대본은 기능 시연용 가상 텍스트이며 실제 음성 인식 결과가 아니다.
+
+## 수동 설정한 데모 채널 기준 (학습된 수치 아님)
+
+```cutline-style
+{
+  "version": "demo-style-1",
+  "targetDuration": [
+    180,
+    250
+  ],
+  "clipLengthMedian": [
+    10,
+    35
+  ],
+  "clipLengthIQR": [
+    5,
+    45
+  ],
+  "maxOutsideIQRShare": 0.5,
+  "keepRatio": [
+    0.6,
+    1
+  ]
+}
+```
