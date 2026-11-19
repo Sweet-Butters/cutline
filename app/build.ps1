@@ -46,7 +46,7 @@ $settings=@{
  'telemetry.telemetryLevel'='off';'update.mode'='none';'extensions.autoUpdate'=$false;'extensions.autoCheckUpdates'=$false;
  'security.workspace.trust.enabled'=$false;'git.openRepositoryInParentFolders'='never';'git.autofetch'=$false;
  'editor.minimap.enabled'=$false;'workbench.activityBar.location'='hidden';'window.commandCenter'=$false;
- 'cutline.autoOpenPanel'=$true;'cutline.openTerminal'=$true;'window.titleBarStyle'='native';
+ 'cutline.autoOpenPanel'=$true;'cutline.openTerminal'=$false;'window.titleBarStyle'='native';
  'workbench.panel.defaultLocation'='bottom';'workbench.panel.opensMaximized'='never';
  'files.exclude'=@{'**/.cutline-cache'=$true;'**/.git'=$true;'**/node_modules'=$true;'**/.timeline-*.tmp'=$true}
 }
@@ -60,7 +60,7 @@ try {
 # Copy only the known sample inputs, never caches, exports or personal history.
 New-Item -ItemType Directory -Force "$bundle/sample-project","$bundle/tools","$bundle/out" | Out-Null
 foreach($item in @('sources','transcripts','timeline.json','style.md','AGENTS.md','CLAUDE.md')){Copy-Item -LiteralPath "$root/sample-project/$item" -Destination "$bundle/sample-project" -Recurse}
-Copy-Item "$root/tools/vidcli.js" "$bundle/tools/"
+Copy-Item "$root/tools/vidcli.js","$root/tools/compare.js" "$bundle/tools/"
 Copy-Item "$root/out/*.js" "$bundle/out/"
 Copy-Item "$root/package.json" $bundle
 Copy-Item "$root/LICENSE" "$bundle/CUTLINE-LICENSE.txt"

@@ -1,0 +1,1 @@
+Recorded from real subscription CLI runs through the Cutline chat on 2026-11-20 (synthetic sample copy). Session IDs, absolute user paths, tool IDs and command output payloads are removed or normalized. No private footage or transcripts. Error events and byte chunking are tested separately.

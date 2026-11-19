@@ -31,7 +31,7 @@
       },
       {
         "command": "cutline.askAgent",
-        "title": "Ask agent: Open Terminal"
+        "title": "Ask agent: Open Chat"
       }
     ],
     "configuration": {
@@ -44,8 +44,22 @@
         },
         "cutline.openTerminal": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Open a terminal at the project root below the timeline editor."
+        },
+        "cutline.autoCommitAgentEdits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Commit timeline.json after agent saves."
+        },
+        "cutline.codexSandbox": {
+          "type": "string",
+          "enum": [
+            "workspace-write",
+            "danger-full-access"
+          ],
+          "default": "danger-full-access",
+          "description": "This Windows build uses danger-full-access because workspace-write tested read-only. This mode does NOT confine writes to the project. Switch to workspace-write on supported installations."
         }
       }
     },
@@ -63,7 +77,8 @@
     "test": "npm run build && node --test out/test/unit.js",
     "sample": "npm run build && node out/tools/sample.js",
     "test:integration": "npm run build && node out/test/run.js",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links --out dist/cutline.vsix"
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links --out dist/cutline.vsix",
+    "test:agents": "npm run build && node tools/test-real-agents.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

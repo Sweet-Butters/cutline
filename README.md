@@ -6,17 +6,19 @@
 
 Cutline은 VSCodium(MIT) + Cutline 확장(MIT)입니다. 실행 파일 아이콘·앱 이름·Windows 앱 식별자를 Cutline으로 변경하며, VSCodium LICENSE/ThirdPartyNotices는 보존합니다. 서명되지 않은 해커톤 데모입니다. Windows x64와 PATH의 `ffmpeg`, `ffprobe`가 필요합니다. CLI 검증·버전 커밋에는 Node.js와 git도 필요합니다. 이 외부 도구와 Claude Code/Codex, 인증정보/API 키는 번들에 넣지 않습니다.
 
-첫 실행 시 샘플을 Windows 문서 폴더의 `Cutline/sample-project`로 복사해 열며 기존 샘플은 덮어쓰지 않습니다. CLI도 옆의 `Cutline/tools`, `Cutline/out`에 복사합니다. `timeline.json`, 오른쪽 영상 패널, 프로젝트 루트를 cwd로 하는 하단 터미널이 자동으로 열립니다. 첫 프록시 생성 중에는 읽기·변환 진행률을 표시합니다. 설정·확장·프록시 캐시는 번들의 `data/`에 저장합니다. 기존 에디터 프로필과 분리됩니다. 번들을 이동할 때는 `data/`도 함께 옮기세요. 자동 열기를 끄려면 `cutline.autoOpenPanel`, 터미널만 끄려면 `cutline.openTerminal`을 false로 바꾸세요. 수동 **Open Video Panel**, 상태 표시줄 **Ask agent**는 계속 사용할 수 있습니다.
+첫 실행 시 샘플을 Windows 문서 폴더의 `Cutline/sample-project`로 복사해 열며 기존 샘플은 덮어쓰지 않습니다. CLI도 옆의 `Cutline/tools`, `Cutline/out`에 복사합니다. 탐색기 옆에 **에이전트 채팅 | 영상·타임라인** 패널이 자동으로 열립니다. 터미널은 기본으로 숨깁니다. 첫 프록시 생성 중에는 읽기·변환 진행률을 표시합니다. 설정·확장·프록시 캐시는 번들의 `data/`에 저장합니다. 기존 에디터 프로필과 분리됩니다. 번들을 이동할 때는 `data/`도 함께 옮기세요. 자동 열기를 끄려면 `cutline.autoOpenPanel`, 터미널도 열려면 `cutline.openTerminal`을 true로 바꾸세요. 수동 **Open Video Panel**, 상태 표시줄 **Ask agent**는 계속 사용할 수 있습니다.
 
 다른 프로젝트는 **File → Open Folder…** 또는 `Cutline.exe "D:\\my-video-project"`로 여세요. 번들에는 샘플의 초기 로컬 git 이력과 `tools/vidcli.js`도 포함되어 있습니다. 커밋할 때는 사용자의 git 이름·이메일 설정이 필요합니다.
 
 **다운로드 앱 데모 순서:**
 
-1. 압축을 풀고 `Cutline.exe`를 실행해 JSON·영상 패널·첫 프레임을 보여 줍니다.
-2. 자동으로 열린 하단 **Ask agent** 터미널에서 시작합니다. cwd는 현재 프로젝트 루트이며 터미널은 JSON 편집기 아래에 열립니다.
-3. 사용자 컴퓨터에 이미 설치·인증한 `claude` 또는 `codex`를 실행합니다. 앱이 에이전트를 자동 실행하거나 키를 요구하지 않습니다.
-4. 아래 촬영용 프롬프트를 입력합니다. 에이전트가 `timeline.json`을 저장하면 4분 → 3분 변화와 클립별 색상 표시를 보여 줍니다.
-5. **Play**, 대본 탐색, **Versions**, **Export MP4**를 차례로 보여 줍니다. 샘플 영상과 대본은 합성 데모 자료입니다.
+1. 압축을 풀고 `Cutline.exe`를 실행해 채팅과 첫 프레임을 보여 줍니다. 탐색기는 `Ctrl+B`로 접을 수 있습니다.
+2. 채팅 상단에서 이미 구독 로그인한 **Claude / Codex**를 선택합니다. 선택은 기억됩니다. API 키를 입력하지 않습니다.
+3. **웃긴 장면 위주 3분 하이라이트** 칩 또는 아래 촬영용 프롬프트를 보냅니다. 자료 확인·저장·검증 진행과 경과 시간이 채팅에 표시됩니다.
+4. 저장 직후 길이 변화, 트림 색상, 자동 생성된 **agent: …** 버전을 보여 줍니다.
+5. 같은 채팅에서 후속 편집을 요청합니다. **＋**는 새 대화, **중단**은 실행 중인 CLI 프로세스 트리 중단입니다. 저장된 편집은 유지합니다.
+6. 클립을 선택하고 **S**로 분할, **Delete**로 삭제, 양 끝을 드래그하여 트림합니다. **Ctrl+Z / Ctrl+Shift+Z**로 수동 편집을 되돌리고 다시 실행합니다.
+7. **대본 · 버전 기록**을 펼쳐 과거 버전을 확인하고, **Export MP4**로 내보냅니다. 샘플은 합성 영상·가상 대본입니다.
 
 **앱 제작:** 저장소에서 `npm ci` 후 아래 명령을 실행합니다. Windows PowerShell, .NET Framework C# 컴파일러, Node.js/npm, git과 GitHub 다운로드 연결이 필요합니다. 빌드는 확장 변경 사항을 반영해 `dist/cutline.vsix`를 재생성하고 설치합니다.
 
@@ -27,7 +29,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app/verify-launch.ps1
 
 `-Clean`은 `app/build/Cutline` 전체(실행 후 생긴 샘플 변경·프로필 포함)를 교체합니다. 다운로드 캐시는 `app/downloads`에 두며 매번 SHA-256을 검증합니다. [공식 VSCodium 1.100.33714 릴리스](https://github.com/VSCodium/vscodium/releases/tag/1.100.33714)의 ZIP·게시된 `.sha256`·스크립트의 고정 해시가 모두 일치해야 빌드됩니다. 원본 LICENSE/ThirdPartyNotices, `ABOUT.md`, 확장 LICENSE를 포함합니다. 검증 스크립트는 실제 창과 `canplay` 로그를 확인하고 데스크톱 화면을 `app/screenshots/cutline-launch-2.png`에 저장한 뒤 자신이 연 번들 프로세스만 닫습니다. 빌드 ZIP에는 검증 과정에서 생성한 사용자 상태가 들어가지 않습니다.
 
-VS Code에서 `timeline.json`을 저장하면 옆의 영상 패널이 바로 반응합니다. Claude Code 또는 Codex가 JSON을 편집하며, 확장은 로컬 영상 재생·변경 표시·git 버전 탐색·내보내기를 담당합니다. 확장에서 AI 서비스 호출, 네트워크 요청, 텔레메트리를 하지 않습니다.
+VS Code에서 `timeline.json`을 저장하면 옆의 영상 패널이 바로 반응합니다. Claude Code 또는 Codex가 JSON을 편집하며, 확장은 로컬 영상 재생·변경 표시·git 버전 탐색·내보내기를 담당합니다. 확장은 API를 직접 호출하지 않습니다. 채팅에서 실행한 구독 CLI는 해당 서비스에 연결합니다.
 
 ## 설치와 첫 실행
 
@@ -35,7 +37,7 @@ VS Code에서 `timeline.json`을 저장하면 옆의 영상 패널이 바로 반
 
 1. VS Code 확장 뷰의 `…` → **Install from VSIX…** → 이 저장소의 `dist/cutline.vsix` 선택.
 2. **Open Folder…**로 `D:\orca\projects\video-ide\sample-project` 열기.
-3. `timeline.json`을 편집기에 열고 `Ctrl+Shift+P` → **Open Video Panel** 실행. 패널은 옆 열에 열립니다.
+3. 채팅·영상 패널이 자동으로 열립니다. 수동으로는 `Ctrl+Shift+P` → **Open Video Panel**, 상태 표시줄 **Ask agent**를 사용하세요.
 4. 최초 실행은 두 원본의 프록시 생성을 기다립니다. WebM 재생이 실패하는 VS Code에서는 H.264/MP3 호환 프록시로 자동 전환합니다. 성공한 형식은 해당 작업공간에 기억합니다. 이후 같은 원본은 캐시를 재사용합니다. 촬영 전에 아래 명령으로 두 형식을 미리 생성하는 것을 권장합니다.
 5. **Play**를 누르면 4분짜리 테스트 패턴 영상이 재생됩니다. 테스트 영상은 각각 120초이며 화면에 카메라 번호·시간, 오디오에 서로 다른 사인 톤이 들어 있습니다. 대본은 가상이며 실제 말소리는 없습니다.
 
@@ -52,18 +54,18 @@ node tools/vidcli.js --project sample-project proxies mp4
 
 ## 촬영용 데모 스크립트
 
-먼저 패널을 열고 첫 프레임이 나타나는지 확인합니다. 에디터의 JSON과 패널을 동시에 보이게 배치합니다. `sample-project`에서 터미널을 열고 이미 설치한 에이전트를 실행합니다. 별도 API 키는 이 확장에서 사용하지 않습니다.
+먼저 패널을 열고 첫 프레임을 확인합니다. 터미널을 닫고 왼쪽 채팅과 오른쪽 영상을 함께 촬영합니다. 채팅 상단에서 백엔드를 선택한 뒤 아래 요청을 보냅니다. 별도 API 키는 사용하지 않습니다.
 
 **Claude Code에 그대로 입력:**
 
 ```text
-AGENTS.md와 style.md를 읽고 transcripts의 가상 대본을 참고해서 3분 하이라이트를 만들어 줘. timeline.json을 직접 편집해. 기존 id는 같은 장면을 트림하거나 이동할 때 유지하고, 새로운 장면은 새 id를 써. 최소 한 클립을 제거하고, 한 클립을 추가하고, 한 클립을 트림해서 편집 변화가 보이게 해 줘. 최종 길이는 정확히 180초로 맞추고 reason은 한국어로 써 줘. 원본 파일은 변경하지 마. node ../tools/vidcli.js validate로 확인한 다음 node ../tools/vidcli.js commit "3분 하이라이트"로 로컬 커밋해. push하지 마.
+AGENTS.md와 style.md를 읽고 transcripts의 가상 대본을 참고해서 3분 하이라이트를 만들어 줘. timeline.json을 직접 편집해. 기존 id는 같은 장면을 트림하거나 이동할 때 유지하고, 새로운 장면은 새 id를 써. 최소 한 클립을 제거하고, 한 클립을 추가하고, 한 클립을 트림해서 편집 변화가 보이게 해 줘. 최종 길이는 정확히 180초로 맞추고 reason은 한국어로 써 줘. 원본 파일은 변경하지 마. node ../tools/vidcli.js validate로 확인해. 버전 커밋은 Cutline이 자동으로 저장해. push하지 마.
 ```
 
 **Codex에 그대로 입력:**
 
 ```text
-이 폴더는 영상 프로젝트야. AGENTS.md와 style.md를 먼저 읽고 transcripts에서 중요한 부분을 찾아 3분 하이라이트를 timeline.json에 작성해 줘. 기존 장면을 트림·이동할 때 id를 유지하고 새 장면에는 새 id를 사용해. 최소 1개 삭제, 1개 추가, 1개 트림을 포함하고 최종 길이는 정확히 180초로 맞춰 줘. 각 클립에 한국어 reason을 작성해. sources는 수정하지 말고 node ../tools/vidcli.js validate를 실행한 뒤 node ../tools/vidcli.js commit "3분 하이라이트"로 로컬 커밋해. push하지 마.
+이 폴더는 영상 프로젝트야. AGENTS.md와 style.md를 먼저 읽고 transcripts에서 중요한 부분을 찾아 3분 하이라이트를 timeline.json에 작성해 줘. 기존 장면을 트림·이동할 때 id를 유지하고 새 장면에는 새 id를 사용해. 최소 1개 삭제, 1개 추가, 1개 트림을 포함하고 최종 길이는 정확히 180초로 맞춰 줘. 각 클립에 한국어 reason을 작성해. sources는 수정하지 말고 node ../tools/vidcli.js validate를 실행해. 버전 커밋은 Cutline이 자동으로 저장해. push하지 마.
 ```
 
 시청자가 보는 장면:
@@ -72,7 +74,7 @@ AGENTS.md와 style.md를 읽고 transcripts의 가상 대본을 참고해서 3�
 2. JSON 저장 직후 초록 배너가 반짝이며 `Timeline changed: +… / −… clips … 04:00 → 03:00`을 표시합니다. 추가는 초록, 삭제는 빨간 잔상, 트림은 주황, 순서 변경은 파랑입니다. 강조는 다음 변경까지 유지됩니다.
 3. 클립 위에 마우스를 올려 reason을 보여 줍니다. 재생 중이면 가능한 같은 클립·원본 시점을 유지하며 변경 내용을 적용합니다.
 4. 대본 줄을 클릭하면 현재 클립 범위 안의 해당 시각으로 이동합니다.
-5. 커밋 후 Versions의 `↻`을 누릅니다. 과거 커밋 클릭 → **Diff vs current** → **Current**로 돌아옵니다. **Restore**는 확인창 후 현재 JSON을 바꿉니다. 복원 자체는 자동 커밋하지 않습니다.
+5. **대본 · 버전 기록**을 펼치면 자동 갱신된 Versions가 보입니다. 과거 커밋 클릭 → **Diff vs current** → **Current**로 돌아옵니다. **Restore**는 확인창 후 현재 JSON을 바꿉니다. 복원 자체는 자동 커밋하지 않습니다.
 6. **Export MP4**를 누르면 원본을 사용한 H.264/AAC 파일이 `exports/`에 만들어집니다. 알림에서 완료 경로를 확인합니다.
 
 에이전트 출력은 매번 다를 수 있습니다. 네트워크/구독 에이전트 없이 같은 변경을 재현하려면 다음을 실행합니다. 시작 상태가 필요하면 `npm run sample`이 타임라인과 가상 대본을 초기화합니다(기존 샘플 동영상은 재생성하지 않음).
@@ -177,10 +179,30 @@ npm run package
 
 현재 timeline.json과 reference 파일의 생성·수정·삭제를 감시합니다. Versions 프리뷰 중에도 비교 트랙의 AI는 현재 timeline.json입니다. 원본 구간 선택의 일치도이며 순서·자막·음악의 품질 점수는 아닙니다.
 
-`files.exclude` 기본값으로 `.cutline-cache`, `.git`, `node_modules`, 임시 timeline 파일을 숨깁니다. 사용자 설정으로 덮어쓸 수 있습니다. `cutline.openTerminal`의 기본값은 true이며 에이전트를 자동 실행하지 않습니다.
+`files.exclude` 기본값으로 `.cutline-cache`, `.git`, `node_modules`, 임시 timeline 파일을 숨깁니다. 사용자 설정으로 덮어쓸 수 있습니다. `cutline.openTerminal`의 기본값은 false입니다. 채팅에서 요청을 보낼 때만 CLI를 실행합니다.
 
 런처의 첫 폴더 인수는 공백·한글 경로도 지원하며 존재하지 않으면 오류로 표시합니다. 인수 없이 실행할 때만 샘플을 복사합니다. `CUTLINE_DOCUMENTS`로 문서 폴더, `CUTLINE_CACHE_ROOT`로 프록시 루트를 지정할 수 있습니다. 번들 기본 캐시는 `data/cache`이며 프로젝트별로 분리합니다. 독립 VSIX/CLI는 환경변수가 없으면 프로젝트의 `.cutline-cache`를 사용합니다.
 
 같은 프로젝트·원본·형식의 동시 프록시 요청은 진행 중 작업을 공유합니다. 프로세스 간 파일 잠금 후 캐시를 다시 확인하므로 중복 변환하지 않습니다. 실제 코덱 재생 실패로 다른 형식이 필요한 경우에는 호환 변환을 수행합니다.
 
 촬영 검증은 `app/verify-launch.ps1`로 실행하며 기본 결과는 `app/screenshots/cutline-launch-2.png`입니다. 검증용 문서·캐시 위치를 저장소 안으로 지정해 다른 디렉터리를 변경하지 않습니다. `-Project "D:\path\project" -Screenshot cutline-chim.png -AllowPreparing`으로 긴 프로젝트의 변환 중 비교 트랙도 확인할 수 있습니다. 이 모드의 화면은 재생 완료 증거가 아니며 JSON 보고서의 canplay를 따로 확인하세요.
+
+## 채팅 백엔드와 권한
+
+Claude Code / Codex CLI를 설치하고 각 CLI의 구독 계정으로 미리 로그인하세요. 없거나 로그인 만료·비정상 종료가 발생하면 채팅에 오류가 표시되고 영상은 계속 사용할 수 있습니다. API 키 및 외부 제공자 환경변수(`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`, `CODEX_API_KEY`, AWS/Azure 등)를 자식 환경에서 제거합니다. 사용자 환경은 변경하지 않습니다. Codex는 `forced_login_method="chatgpt"`, `model_provider="openai"`로 실행합니다.
+
+- Claude: `claude -p PROMPT --output-format stream-json --verbose --permission-mode acceptEdits --permission-prompts none`. 읽기·파일 편집과 `node tools/vidcli.js …`, `node tools/compare.js …`(샘플의 `../tools/`도 포함)만 도구 목록/allowlist에 둡니다. 광범위한 Bash 허용이나 `--dangerously-skip-permissions`는 사용하지 않습니다. `--setting-sources "" --strict-mcp-config`로 사용자/프로젝트 훅과 MCP 자동 실행을 배제합니다. `--resume SESSION_ID`로 후속 대화를 이어 갑니다. 이 allowlist는 OS 파일시스템 샌드박스가 아닙니다.
+- Codex: `codex exec --json`과 `approval_policy="never"`, `sandbox_mode`를 사용합니다. 후속 요청은 `codex exec … resume THREAD_ID --json PROMPT`입니다. 이 Windows 머신의 `workspace-write` 실제 실행은 “현재 작업 공간이 읽기 전용” 응답으로 파일을 수정하지 못했습니다. 따라서 이 빌드의 `cutline.codexSandbox` 기본값은 실제 수정에 성공한 **danger-full-access**입니다. **프로젝트 밖 쓰기를 기술적으로 차단하지 않습니다.** 프로젝트 안에서만 편집하라는 지시를 전달하며, 지원되는 환경에서는 설정을 `workspace-write`로 낮추세요. 자동 권한 확대·자동 재시도는 하지 않습니다.
+- cwd는 열린 영상 프로젝트입니다. 프롬프트는 셸에 삽입하지 않고 인수 배열로 전달합니다. Windows npm Codex는 cmd 셸을 거치지 않고 Node 진입점을 직접 실행합니다.
+- 실행 중 저장한 정상 타임라인은 기존 diff 감시와 연결됩니다. `cutline.autoCommitAgentEdits=true`(기본값)이면 `agent: <요청 첫 줄>`로 timeline.json만 커밋합니다. git 저장소/작성자 설정이 없으면 편집은 유지하고 오류를 표시합니다. CLI가 직접 커밋하지 않도록 안내합니다.
+- 각 백엔드 세션 ID는 프로젝트별로 기억합니다. 채팅 표시 내용과 수동 undo 스택은 현재 패널 세션에만 유지됩니다. 에이전트 편집 후에는 수동 undo 이력을 초기화합니다. 외부 파일 변경 후 오래된 undo는 충돌 메시지로 거절합니다.
+
+프로젝트의 `.cutline/prompts.json`에 문자열 배열을 두면 칩을 바꿀 수 있습니다(패널을 다시 열면 적용). 없으면 기본 3개를 사용합니다.
+
+```json
+["style.md대로 20분 편집본 만들어줘", "웃긴 장면 위주 3분 하이라이트", "방금 편집에서 앞부분 30초 줄여줘"]
+```
+
+`.cutline/edit-log.jsonl`에는 `who: human|agent`, `action`, `clipIds`, `before`, `after`, `at`을 한 편집당 한 줄 기록합니다. 수동 분할·삭제·트림·undo·redo는 즉시 timeline.json에 저장됩니다. 원본 길이를 벗어난 트림은 거부합니다. 에이전트 실행 중이나 과거 버전 프리뷰에서는 수동 편집을 잠급니다. 대본 입력 중에는 편집 단축키를 가로채지 않습니다. 분할은 원본 기준 재생 위치를 사용하며 프레임 단위 NLE 정밀도를 보장하지 않습니다.
+
+`npm run test:agents`는 샘플 **복사본**에서 실제 구독 CLI를 채팅 폼 → webview 메시지 → 확장 경로로 실행합니다. 인증 파일을 `.test-data/real-agent` 아래에 잠시 복사하고 종료 시 지웁니다. 프로젝트, 로그, 세션은 git-ignored `.test-data/`에만 남습니다. `CUTLINE_TEST_SANDBOX=workspace-write`로 제한 모드 재검증이 가능합니다. 실측 결과는 [VERIFICATION.md](VERIFICATION.md)를 참고하세요. Codex 비대화형 JSON/재개 인터페이스는 [공식 문서](https://developers.openai.com/codex/noninteractive)와 설치된 CLI 도움말을 확인했습니다.

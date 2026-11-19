@@ -1,5 +1,35 @@
 # 실행 검증 보고서
 
+## 2026-11-20 채팅·수동 편집 업데이트
+
+- `npm test`: 15개 통과. CLI 인수/구독 환경변수 제거, 실제 JSONL 기록 fixture의 UTF-8 청크 파싱, CLI 누락/로그인 오류/비정상 종료, 프로세스 트리 중단, 자동 커밋 및 끄기, 다른 staged 파일 보존, 분할·삭제·트림·undo/redo·외부 변경 충돌·human/agent edit-log를 검사했습니다.
+- `npm run test:integration`: 실제 VS Code 패널에서 채팅 초기화, 터미널 기본 숨김, full-width 패널, 재생·버전·live diff 및 수동 분할/undo/redo/트림/삭제·로그를 통과했습니다. 저장→DOM diff는 일반 실행 1,264ms, 빌드와 동시에 실행한 최종 검사 3,918ms였습니다. 상세 결과는 git-ignored `.test-data/integration-report.json`에 있습니다.
+- 실제 구독 실행은 `.test-data/real-agent/project` 샘플 복사본에서 채팅 form → webview → 확장 → CLI 경로를 사용했습니다. 침착맨 프로젝트에는 에이전트를 실행하지 않았습니다.
+
+| 백엔드 | 편집 턴 경과 시간 | 실제 파일 수정 | 패널 diff 응답 | agent: 자동 버전 | 같은 세션 후속 실행 |
+|---|---:|---|---|---|---|
+| Claude Code | 7.641초 | 첫 클립 60→59초 | 확인 | 확인 | validate + compare 성공, F1 0.9979123, 9.346초 |
+| Codex | 41.903초 | 첫 클립 59→58초 | 확인 | 확인 | validate + compare 성공, F1 0.9958159, 13.461초 |
+
+Codex `workspace-write`의 별도 실제 실행은 10.180초 후 **“현재 작업 공간이 읽기 전용이라 `timeline.json`의 첫 클립에서 `out`을 `58`로, `reason`을 `\"codex 채팅 검증\"`으로 저장할 수 없었습니다.”**라고 응답했습니다. exit 0이었지만 파일·diff·커밋은 없었습니다. `danger-full-access` + `approval_policy="never"`에서 성공해 이 Windows 빌드의 설정 기본값으로 사용했습니다. 프로젝트 밖 쓰기를 OS 수준에서 제한하는 모드는 아닙니다. 자동 권한 확대는 하지 않습니다.
+
+Claude 검증 명령의 초기 시도는 `cd … && node …; echo …` 복합 명령으로 인해 allowlist에서 거부되었습니다. 허용 도구를 넓히지 않고 단일 Node 명령만 사용하도록 지시하고, 인수 없는 compare 호출을 명시적으로 허용해 해결했습니다. 마지막 실제 실행에서는 `node tools/vidcli.js validate`와 `node tools/compare.js`가 각각 승인창 없이 성공했습니다.
+
+최종 반복 실행의 요약은 `test-results/chat-agent-report.json`에 있습니다.
+
+전체 실제 실행 기록은 `.test-data/real-agent-report.json`, 제한 모드 실패 기록은 `.test-data/real-agent-workspace-write-report.json`입니다. 원시 스트림은 `.test-data/real-agent/trace`에만 두고, 테스트 fixture는 합성 샘플 출력에서 세션 ID·사용자 절대 경로 등을 제거했습니다. 테스트용 인증 파일은 종료 시 제거합니다.
+
+수동 편집은 단일 edit-order 스트립만 지원합니다. 에이전트 실행/과거 버전 프리뷰 동안 잠그며, 외부 저장 후 오래된 undo는 거절합니다. 드래그 트림은 원본 범위를 검사합니다. 영상·원본 비교 트랙을 우선 배치하고 대본/버전 목록을 접었습니다. 일반적인 창 크기에서 핵심 트랙은 모두 보이지만 reference 원본 수가 많은 프로젝트는 스크롤이 필요할 수 있습니다.
+
+앱 화면 검증: 샘플 복사본에서 번들 `Cutline.exe`를 실행해 `canplay`를 확인했습니다. 1440×900 유효 화면에서 실제 webview는 1230×684 CSS px이며 영상 높이 218.875px, 편집 스트립 아래 471.875px, human/AI 비교 트랙 아래 646.375px로 **스크롤 없이 모두 표시**되었습니다. 두 원본 비교 트랙은 나란히 배치됩니다. [샘플 화면](app/screenshots/private/chat-sample.png)은 git-ignored 폴더에 있습니다.
+
+침착맨 프로젝트는 읽기 전용으로 열었습니다. 기존 원본 프록시가 아직 완성되지 않아 실제 재생 완료를 주장하지 않습니다. 준비 상태 화면만 `app/screenshots/private/chat-chim-preparing.png`에 저장합니다. 이 확인의 새 캐시는 저장소 내부 `app/temp/verification-cache`로 분리했고, 프로젝트 파일·대본·동영상을 git에 추가하지 않았습니다.
+
+아래는 이전 릴리스의 검증 기록이며, 터미널/옆 JSON 편집기 배치는 이번 변경으로 대체되었습니다.
+
+---
+
+
 검증일: 2026-11-20 KST. Windows 11, Node 24.19.0, npm 11.17.0, ffmpeg 9.0.1, 설치된 VS Code 1.145.3에서 실행했습니다. 다른 PC/VS Code 배포판은 검증하지 않았습니다.
 
 ## 실행한 검증

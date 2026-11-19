@@ -1,4 +1,5 @@
 import {test} from 'node:test';
+import './agent-unit';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -20,11 +21,11 @@ test('reference metrics use original source union, independent of edit order',()
 test('launcher actually resolves explicit folders and preserves copied sample edits',async()=>{
   if(process.platform==='win32')assert.match(await run('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(base,'app/test-launcher.ps1')]),/passed/);
 });
-test('workspace defaults hide internal files and open the agent terminal',async()=>{
+test('workspace defaults hide internal files and keep terminal closed',async()=>{
   const manifest=JSON.parse(await fs.readFile(path.join(base,'package.json'),'utf8'));
   const excludes=manifest.contributes.configurationDefaults['files.exclude'];
   for(const name of ['**/.cutline-cache','**/.git','**/node_modules','**/.timeline-*.tmp'])assert.equal(excludes[name],true);
-  assert.equal(manifest.contributes.configuration.properties['cutline.openTerminal'].default,true);
+  assert.equal(manifest.contributes.configuration.properties['cutline.openTerminal'].default,false);
 });
 test('concurrent proxy requests share one generation and report progress',async()=>{
   const dir=await fs.mkdtemp(path.join(base,'.test-data','proxy-'));await fs.mkdir(path.join(dir,'sources'));

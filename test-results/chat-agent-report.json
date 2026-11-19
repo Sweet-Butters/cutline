@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-20",
+  "project": "Synthetic sample COPY (.test-data/real-agent/project)",
+  "codexSandbox": "danger-full-access",
+  "results": [
+    {
+      "backend": "claude",
+      "editElapsedMs": 7641,
+      "wallWithDiffCheckMs": 9306,
+      "changed": true,
+      "panelDiffAcknowledged": true,
+      "versionCommitted": true,
+      "followUpElapsedMs": 9346,
+      "followUpValidateAndCompare": true,
+      "errors": []
+    },
+    {
+      "backend": "codex",
+      "editElapsedMs": 41903,
+      "wallWithDiffCheckMs": 43756,
+      "changed": true,
+      "panelDiffAcknowledged": true,
+      "versionCommitted": true,
+      "followUpElapsedMs": 13461,
+      "followUpValidateAndCompare": true,
+      "errors": []
+    }
+  ]
+}

@@ -9,17 +9,19 @@ async function until<T>(fn:()=>T,description:string,timeout=180000):Promise<NonN
 export async function run(){
   const root=process.env.CUTLINE_TEST_ROOT!,sample=path.join(root,'sample-project'),file=path.join(sample,'timeline.json');
   const original=await fs.readFile(file,'utf8');
+  const logFile=path.join(sample,'.cutline/edit-log.jsonl');const oldLog=await fs.readFile(logFile).catch(()=>undefined);
   const referenceFile=path.join(sample,'reference','integration.timeline.json');await fs.mkdir(path.dirname(referenceFile),{recursive:true});await fs.writeFile(referenceFile,original);
   const extension=vscode.extensions.getExtension('cutline-local.cutline');assert.ok(extension);const api=await extension.activate();
   try{
     assert.equal(await api.startup,true,'Automatically opens a timeline project');
-    assert.ok(vscode.window.terminals.some(t=>t.name==='Ask agent'),'Agent terminal opens');
+    assert.ok(!vscode.window.terminals.some(t=>t.name==='Ask agent'),'Terminal hidden by default');
+    await until(()=>api.events.some((e:any)=>e.type==='chatReady'),'chat initialized');
     assert.equal(vscode.workspace.getConfiguration('files').get<Record<string,boolean>>('exclude')?.['**/.cutline-cache'],true);
     const reference=await until(()=>api.events.find((e:any)=>e.type==='referencesApplied'&&e.items.some((i:any)=>i.name==='integration.timeline.json')),'reference track rendered');
     assert.equal(reference.items.find((i:any)=>i.name==='integration.timeline.json').metrics.f1,1);
-    await until(()=>vscode.window.visibleTextEditors.some(e=>e.document.uri.fsPath.toLowerCase()===file.toLowerCase()&&e.viewColumn===vscode.ViewColumn.One),'Timeline automatically opens in main editor',10000);
+    await vscode.commands.executeCommand('cutline.askAgent');
     const first=await until(()=>api.events.find((e:any)=>e.type==='applied'),'webview received first timeline');assert.equal(first.clipCount,4);
-    assert.ok(vscode.window.tabGroups.all.some(g=>g.viewColumn!==vscode.ViewColumn.One&&g.tabs.some(t=>t.input instanceof vscode.TabInputWebview)),'Panel opened beside editor');
+    assert.ok(vscode.window.tabGroups.all.some(g=>g.viewColumn===vscode.ViewColumn.One&&g.tabs.some(t=>t.input instanceof vscode.TabInputWebview)),'Chat and video use full editor width');
     const metadata=await until(()=>api.events.find((e:any)=>e.type==='playback'&&e.event==='loadedmetadata'),'proxy loadedmetadata (including automatic fallback)',60000);
     assert.equal(metadata.width,640);
     const canplay=await until(()=>api.events.find((e:any)=>e.type==='playback'&&e.event==='canplay'),'proxy canplay',30000);assert.ok(metadata.duration>119);
@@ -42,6 +44,22 @@ export async function run(){
     assert.ok(playback.versionCount>0);await api.testAction('version',{index:0});const versionSent=await until(()=>api.events.find((e:any)=>e.type==='sent'&&e.message.version),'version preview');await until(()=>api.events.some((e:any)=>e.type==='applied'&&e.revision===versionSent.message.revision),'version DOM applied');const preview=await snapshot('version-preview');assert.match(preview.version,/Preview:/);
     await api.testAction('click',{id:'compare'});const comparison=await until(()=>api.events.find((e:any)=>e.type==='comparisonApplied'),'version comparison');assert.equal(comparison.diff.after,160);
     await api.testAction('click',{id:'current'});const currentSent=await until(()=>api.events.find((e:any)=>e.type==='sent'&&!e.message.version&&e.message.revision>versionSent.message.revision),'current sent');await until(()=>api.events.some((e:any)=>e.type==='applied'&&e.revision===currentSent.message.revision),'current DOM applied');const working=await snapshot('current');assert.equal(working.version,'Current working file');
+    const editStart=api.events.length;
+    await api.testAction('select',{index:0,time:10});await new Promise(r=>setTimeout(r,300));
+    await api.testAction('click',{id:'split'});
+    await until(()=>api.events.slice(editStart).some((e:any)=>e.type==='applied'&&e.clipCount===5),'manual split diff');
+    assert.equal((await readTimeline(sample)).clips[0].out,10);
+    await api.testAction('click',{id:'undo'});
+    await until(()=>api.events.slice(editStart).filter((e:any)=>e.type==='applied').length>=2,'undo diff');
+    assert.equal((await readTimeline(sample)).clips.length,4);
+    await api.testAction('click',{id:'redo'});
+    await until(()=>api.events.slice(editStart).filter((e:any)=>e.type==='applied').length>=3,'redo diff');
+    await api.testAction('manual',{edit:'trim',data:{id:'intro',in:1,out:9}});
+    await until(()=>api.events.slice(editStart).some((e:any)=>e.type==='applied'&&e.diff?.trimmed?.some((c:any)=>c.in===1&&c.out===9)),'manual trim diff');
+    await api.testAction('click',{id:'delete'});
+    await until(()=>api.events.slice(editStart).some((e:any)=>e.type==='applied'&&e.diff?.removed?.some((c:any)=>c.id==='intro')),'manual delete diff');
+    const editLog=(await fs.readFile(logFile,'utf8')).trim().split('\n').map(line=>JSON.parse(line));
+    assert.deepEqual(editLog.slice(-5).map(e=>e.action),['split','undo','redo','trim','delete']);assert.ok(editLog.slice(-5).every(e=>e.who==='human'));
     // Invalid JSON must keep the last valid panel rather than applying an empty state.
     const sentBefore=api.events.filter((e:any)=>e.type==='sent').length;await fs.writeFile(file,'{"version":');await new Promise(r=>setTimeout(r,700));assert.equal(api.events.filter((e:any)=>e.type==='sent').length,sentBefore);
     api.dispose();
@@ -61,5 +79,5 @@ export async function run(){
     } finally {await config.update('autoOpenPanel',oldSetting,vscode.ConfigurationTarget.Global);}
     const report={autoOpen:true,optOut:true,manualOpenWithOptOut:true,noTimeline:true,vscode:vscode.version,extensionPath:extension.extensionPath,diffLatencyMs,proxy:{format:applied.format,metadata,canplay,playback},webmErrors:api.events.filter((e:any)=>e.type==='playback'&&e.event==='error'),h264:codec,diff:applied,transcript,preview,comparison,beside:true,invalidJsonPreservesPanel:true};
     await fs.writeFile(path.join(root,'.test-data','integration-report.json'),JSON.stringify(report,null,2));console.log('CUTLINE INTEGRATION PASSED',JSON.stringify(report));
-  }finally{await fs.rm(referenceFile,{force:true});await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
+  }finally{if(oldLog)await fs.writeFile(logFile,oldLog);else await fs.rm(logFile,{force:true});await fs.rm(referenceFile,{force:true});await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
 }

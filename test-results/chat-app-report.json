@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-20",
+  "bundle": {
+    "path": "app/dist/Cutline-win-x64.zip",
+    "bytes": 189240427,
+    "sha256": "30ef176aac4694b8ac988f296cd1b6791fd86f65a7d66368c4bad191bd7b2568"
+  },
+  "sample": {
+    "screenshot": "app/screenshots/private/chat-sample.png",
+    "playbackCanplay": true,
+    "webview": {
+      "width": 1230,
+      "height": 684,
+      "videoHeight": 218.875,
+      "timelineBottom": 471.875,
+      "referencesBottom": 646.375,
+      "chatVisible": true
+    },
+    "coreTracksVisibleWithoutScroll": true
+  },
+  "chim": {
+    "screenshot": "app/screenshots/private/chat-chim-preparing.png",
+    "playbackVerified": false,
+    "proxyPending": true,
+    "projectAccess": "read-only; verification cache under app/temp"
+  }
+}
