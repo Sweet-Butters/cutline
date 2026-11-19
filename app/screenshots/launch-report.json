@@ -1,0 +1,9 @@
+﻿{
+    "started":  "2026-11-20T05:38:20.5217730+09:00",
+    "log":  "D:\\orca\\projects\\video-ide\\app\\build\\Cutline\\data\\user-data\\logs\\20261120T053821\\window1\\exthost\\cutline-local.cutline\\Cutline.log",
+    "pid":  93812,
+    "canplay":  "2026-11-20 05:38:25.974 [info] {\"root\":\"d:\\\\orca\\\\projects\\\\video-ide\\\\app\\\\build\\\\Cutline\\\\sample-project\",\"type\":\"playback\",\"event\":\"canplay\",\"revision\":1,\"source\":\"sources/camera-1.mp4\"}",
+    "screenshot":  "app/screenshots/cutline-launch.png",
+    "title":  "Cutline - sample-project - Cutline",
+    "executable":  "D:\\orca\\projects\\video-ide\\app\\build\\Cutline\\VSCodium.exe"
+}

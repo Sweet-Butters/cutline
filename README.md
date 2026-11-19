@@ -1,5 +1,32 @@
 # Cutline — 에이전트가 편집하는 영상 IDE
 
+## 포터블 앱 다운로드·실행 (Windows x64)
+
+배포 파일은 `app/dist/Cutline-win-x64.zip`입니다. 이 작업은 로컬 빌드만 제공하며 공개 다운로드 서버에는 업로드하지 않습니다. 제작자가 전달한 ZIP을 다운로드하고 **모두 압축 풀기**로 쓰기 가능한 폴더에 풀어 `Cutline/Cutline.exe`를 실행하세요. ZIP 안에서 직접 실행하지 마세요.
+
+Cutline은 VSCodium(MIT) + Cutline 확장(MIT)입니다. Microsoft 제품 브랜딩을 사용하지 않는 별도 런처이며, VSCodium 내부의 이름·라이선스는 원본 그대로 보존합니다. 서명되지 않은 해커톤 데모입니다. Windows x64와 PATH의 `ffmpeg`, `ffprobe`가 필요합니다. CLI 검증·버전 커밋에는 Node.js와 git도 필요합니다. 이 외부 도구와 Claude Code/Codex, 인증정보/API 키는 번들에 넣지 않습니다.
+
+실행하면 복사된 `sample-project`의 `timeline.json`과 오른쪽 Cutline 영상 패널이 자동으로 열립니다. 첫 실행은 프록시 변환 때문에 잠시 걸릴 수 있습니다. 창 제목은 `Cutline`으로 시작하며, 설정과 확장은 번들의 `data/`에만 저장합니다. 기존 에디터 프로필과 분리됩니다. 번들을 이동할 때는 `data/`도 함께 옮기세요. 자동 열기를 끄려면 설정에서 `cutline.autoOpenPanel`을 false로 바꾸세요. 수동 **Open Video Panel** 명령은 계속 사용할 수 있습니다.
+
+다른 프로젝트는 **File → Open Folder…** 또는 `Cutline.exe "D:\\my-video-project"`로 여세요. 번들에는 샘플의 초기 로컬 git 이력과 `tools/vidcli.js`도 포함되어 있습니다. 커밋할 때는 사용자의 git 이름·이메일 설정이 필요합니다.
+
+**다운로드 앱 데모 순서:**
+
+1. 압축을 풀고 `Cutline.exe`를 실행해 JSON·영상 패널·첫 프레임을 보여 줍니다.
+2. **Terminal → New Terminal** 또는 **Ctrl+`**로 통합 터미널을 엽니다. 현재 폴더가 번들의 `sample-project`인지 확인합니다.
+3. 사용자 컴퓨터에 이미 설치·인증한 `claude` 또는 `codex`를 실행합니다. 앱이 에이전트를 자동 실행하거나 키를 요구하지 않습니다.
+4. 아래 촬영용 프롬프트를 입력합니다. 에이전트가 `timeline.json`을 저장하면 4분 → 3분 변화와 클립별 색상 표시를 보여 줍니다.
+5. **Play**, 대본 탐색, **Versions**, **Export MP4**를 차례로 보여 줍니다. 샘플 영상과 대본은 합성 데모 자료입니다.
+
+**앱 제작:** 저장소에서 `npm ci` 후 아래 명령을 실행합니다. Windows PowerShell, .NET Framework C# 컴파일러, Node.js/npm, git과 GitHub 다운로드 연결이 필요합니다. 빌드는 확장 변경 사항을 반영해 `dist/cutline.vsix`를 재생성하고 설치합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File app/build.ps1 -Clean
+powershell -NoProfile -ExecutionPolicy Bypass -File app/verify-launch.ps1
+```
+
+`-Clean`은 `app/build/Cutline` 전체(실행 후 생긴 샘플 변경·프로필 포함)를 교체합니다. 다운로드 캐시는 `app/downloads`에 두며 매번 SHA-256을 검증합니다. [공식 VSCodium 1.100.33714 릴리스](https://github.com/VSCodium/vscodium/releases/tag/1.100.33714)의 ZIP·게시된 `.sha256`·스크립트의 고정 해시가 모두 일치해야 빌드됩니다. 원본 LICENSE/ThirdPartyNotices, `ABOUT.md`, 확장 LICENSE를 포함합니다. 검증 스크립트는 실제 창과 `canplay` 로그를 확인하고 데스크톱 화면을 `app/screenshots/cutline-launch.png`에 저장한 뒤 자신이 연 번들 프로세스만 닫습니다. 빌드 ZIP에는 검증 과정에서 생성한 사용자 상태가 들어가지 않습니다.
+
 VS Code에서 `timeline.json`을 저장하면 옆의 영상 패널이 바로 반응합니다. Claude Code 또는 Codex가 JSON을 편집하며, 확장은 로컬 영상 재생·변경 표시·git 버전 탐색·내보내기를 담당합니다. 확장에서 AI 서비스 호출, 네트워크 요청, 텔레메트리를 하지 않습니다.
 
 ## 설치와 첫 실행

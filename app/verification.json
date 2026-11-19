@@ -1,0 +1,40 @@
+{
+  "build": {
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File app/build.ps1 -Clean",
+    "exitCode": 0,
+    "reusedVerifiedDownload": true,
+    "vscodium": "1.100.33714"
+  },
+  "unit": {
+    "command": "npm test",
+    "exitCode": 0,
+    "passed": 5
+  },
+  "integration": {
+    "command": "npm run test:integration",
+    "exitCode": 0,
+    "report": "screenshots/integration-report.json",
+    "note": "Replaced a fixed playback sleep with a bounded wait for decoded frames after an initial timing failure."
+  },
+  "launch": {
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File app/verify-launch.ps1",
+    "report": "screenshots/launch-report.json",
+    "screenshot": "screenshots/cutline-launch.png",
+    "visuallyInspected": true
+  },
+  "zip": {
+    "path": "dist/Cutline-win-x64.zip",
+    "bytes": 189198434,
+    "sha256": "e86977d7f4a37d70fc1a29b61d019e4d287f4856bb0530ea5e724775e63cd234",
+    "crc": "all entries passed Python zipfile.testzip()",
+    "requiredFiles": "launcher, icon, extension, settings, upstream licenses and sample verified",
+    "sampleDurationSeconds": 240
+  },
+  "limitations": [
+    "No separate clean Windows machine tested. ffmpeg and ffprobe must be on PATH.",
+    "Claude and Codex authentication and an actual agent editing session were not run.",
+    "Unsigned portable demo; no public upload or remote push.",
+    "Screenshot shows the upstream installation-folder warning; automatic updates are disabled.",
+    "Unit and full integration tests used the existing development environment; the installed VSCodium bundle was separately launched to verify canplay and layout."
+  ]
+}

@@ -7,3 +7,8 @@ dist/
 **/.cutline-cache/
 **/exports/
 *.log
+
+app/build/
+app/downloads/
+app/dist/
+app/temp/

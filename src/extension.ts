@@ -8,6 +8,7 @@ import {ensureProxy,validateMedia,exportTimeline,ProxyFormat} from './media';
 import * as history from './history';
 
 export function activate(context:vscode.ExtensionContext) {
+  const output=vscode.window.createOutputChannel('Cutline',{log:true});context.subscriptions.push(output);
   let panel:vscode.WebviewPanel|undefined, root='', current:Timeline|undefined, shown:Timeline|undefined, selected:string|undefined;
   let revision=0, loadRequest=0, ready=false, timer:NodeJS.Timeout|undefined;
   let proxyFormat:ProxyFormat=context.extensionMode===vscode.ExtensionMode.Test?'webm':context.workspaceState.get<ProxyFormat>('proxyFormat','webm');
@@ -16,7 +17,7 @@ export function activate(context:vscode.ExtensionContext) {
   const events: any[]=[];
   const record=(event:any)=>{events.push(event);if(events.length>200)events.shift();if(context.extensionMode===vscode.ExtensionMode.Test)console.log('CUTLINE EVENT',JSON.stringify(event));};
   const send=async(message:any)=>{if(panel&&!panel.webview.options.enableScripts)return;await panel?.webview.postMessage(message);};
-  const fail=(e:unknown)=>send({type:'error',message:e instanceof Error?e.message:String(e)});
+  const fail=(e:unknown)=>{const message=e instanceof Error?e.message:String(e);output.error(message);record({type:'error',message});return send({type:'error',message});};
   async function getRoot() {
     const folders=vscode.workspace.workspaceFolders;
     if(!folders?.length) throw Error('Open a video project folder first');
@@ -55,9 +56,9 @@ export function activate(context:vscode.ExtensionContext) {
       await display(next,old?diffTimeline(old,next):undefined);
     } catch(e) {if(request===loadRequest)await fail(e);}
   }
-  async function open() {
+  async function open(folder?:string) {
     if(panel){panel.reveal(vscode.ViewColumn.Beside);return;}
-    root=await getRoot();current=undefined;shown=undefined;selected=undefined;ready=false;
+    root=folder??await getRoot();current=undefined;shown=undefined;selected=undefined;ready=false;
     panel=vscode.window.createWebviewPanel('cutline.video',BRAND,vscode.ViewColumn.Beside,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(path.join(root,'.cutline-cache')),vscode.Uri.file(path.join(root,'sources')),vscode.Uri.joinPath(context.extensionUri,'media')]});
     panel.webview.html=html(panel.webview,context.extensionUri);
     panel.onDidDispose(()=>{panel=undefined;ready=false;++revision;if(timer)clearTimeout(timer);watchers.forEach(w=>w.dispose());watchers=[];});
@@ -68,6 +69,7 @@ export function activate(context:vscode.ExtensionContext) {
     watchers.push(tw,tw.onDidChange(schedule),tw.onDidCreate(schedule),tw.onDidDelete(schedule));
     panel.webview.onDidReceiveMessage(async m=>{
       record(m);
+      if(m.type==='playback')output.info(JSON.stringify({root,...m}));
       try {
         if(m.type==='ready'){ready=true;await reload();}
         if(m.type==='playback'&&m.event==='error'&&m.revision===revision&&proxyFormat==='webm'&&shown) {
@@ -106,8 +108,20 @@ export function activate(context:vscode.ExtensionContext) {
         void vscode.window.showInformationMessage('Imported. Add clips with vidcli or edit timeline.json.');
       }catch(e){void vscode.window.showErrorMessage(String(e));}
     }));
+  async function autoOpen() {
+    if(panel)return false;
+    for(const folder of vscode.workspace.workspaceFolders??[]) {
+      if(!vscode.workspace.getConfiguration('cutline',folder.uri).get('autoOpenPanel',true))continue;
+      const timeline=vscode.Uri.joinPath(folder.uri,'timeline.json');
+      try {await vscode.workspace.fs.stat(timeline);}catch{continue;}
+      await vscode.window.showTextDocument(timeline,{viewColumn:vscode.ViewColumn.One,preview:false});
+      await open(folder.uri.fsPath);return true;
+    }
+    return false;
+  }
+  const startup=autoOpen().catch(e=>{output.error(String(e));return false;});
   // Exported diagnostics are local extension API only; codec probe is enabled solely by test mode.
-  return {events,async codecProbe(source:string) {
+  return {events,startup,async testAutoOpen(){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');return autoOpen();},async codecProbe(source:string) {
     if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');
     const file=await sourcePath(root,source);
     await send({type:'codecProbe',url:panel!.webview.asWebviewUri(vscode.Uri.file(file)).toString()});
