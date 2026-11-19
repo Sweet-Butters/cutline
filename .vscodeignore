@@ -1,0 +1,12 @@
+.git/**
+.npm-cache/**
+.test-data/**
+.vscode-test/**
+node_modules/**
+src/**
+out/test/**
+out/tools/sample.*
+sample-project/**
+dist/**
+**/*.map
+tsconfig.json

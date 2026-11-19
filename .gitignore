@@ -1,0 +1,9 @@
+node_modules/
+out/
+.npm-cache/
+.test-data/
+.vscode-test/
+dist/
+**/.cutline-cache/
+**/exports/
+*.log
