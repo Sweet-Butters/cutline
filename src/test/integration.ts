@@ -11,7 +11,7 @@ async function until<T>(fn:()=>T,description:string,timeout=180000):Promise<NonN
 export async function run(){
   const root=process.env.CUTLINE_TEST_ROOT!,sample=path.join(root,'sample-project'),file=path.join(sample,'timeline.json');
   const original=await fs.readFile(file,'utf8');
-  await computeSignal(sample,'sources/camera-1.mp4');
+  await computeSignal(sample,'sources/camera-1.mp4',false);
   const styleFile=path.join(sample,'style.md'),originalStyle=await fs.readFile(styleFile,'utf8');
   const logFile=path.join(sample,'.cutline/edit-log.jsonl');const oldLog=await fs.readFile(logFile).catch(()=>undefined);
   const referenceFile=path.join(sample,'reference','integration.timeline.json');await fs.mkdir(path.dirname(referenceFile),{recursive:true});await fs.writeFile(referenceFile,original);

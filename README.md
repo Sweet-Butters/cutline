@@ -162,7 +162,7 @@ npm run package
 
 샘플 생성은 `npm run sample`입니다. Windows의 `C:/Windows/Fonts/consola.ttf`를 사용합니다. 생성된 동영상도 저장소에 포함되어 있으므로 일반 설치에서 재생성할 필요가 없습니다.
 
-통합 테스트는 기존 `D:/Microsoft VS Code/Code.exe`를 사용합니다. 다른 설치 위치는 `$env:CUTLINE_VSCODE = 'C:/.../Code.exe'`로 설정하세요. 테스트 전용 사용자 데이터·확장·임시 파일은 `.test-data/` 아래에 둡니다. 실제 샘플 타임라인을 수정한 뒤 finally에서 원문을 복구하므로 테스트 중에는 샘플을 편집하지 마세요. 강제 프로세스 종료 시에는 `npm run sample`로 복구하세요.
+통합 테스트는 Windows에서 사용자별·시스템 기본 설치 경로의 VS Code를 찾고, 찾지 못하면 테스트용 VS Code를 내려받습니다. 특정 실행 파일은 `$env:CUTLINE_VSCODE = 'C:/.../Code.exe'`로 지정하세요. 테스트 전용 사용자 데이터·확장·임시 파일은 `.test-data/` 아래에 둡니다. 실제 샘플 타임라인을 수정한 뒤 finally에서 원문을 복구하므로 테스트 중에는 샘플을 편집하지 마세요. 강제 프로세스 종료 시에는 `npm run sample`로 복구하세요.
 
 설치한 VSIX 자체를 검사하려면 `$env:CUTLINE_EXTENSION_PATH`에 격리된 설치 디렉터리(예: `.test-data/package-extensions/cutline-local.cutline-0.1.0`의 절대 경로)를 지정한 뒤 같은 통합 테스트를 실행합니다. 재생 자동화는 사용자 제스처 정책 때문에 음소거로 실행합니다.
 
