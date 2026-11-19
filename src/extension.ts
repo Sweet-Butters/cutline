@@ -4,15 +4,17 @@ import * as path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {BRAND} from './brand';
 import {Timeline,readTimeline,writeTimeline,diffTimeline,transcripts,sourcePath} from './core';
-import {ensureProxy,validateMedia,exportTimeline} from './media';
+import {ensureProxy,validateMedia,exportTimeline,ProxyFormat} from './media';
 import * as history from './history';
 
 export function activate(context:vscode.ExtensionContext) {
   let panel:vscode.WebviewPanel|undefined, root='', current:Timeline|undefined, shown:Timeline|undefined, selected:string|undefined;
-  let revision=0, ready=false, timer:NodeJS.Timeout|undefined;
+  let revision=0, loadRequest=0, ready=false, timer:NodeJS.Timeout|undefined;
+  let proxyFormat:ProxyFormat=context.extensionMode===vscode.ExtensionMode.Test?'webm':context.workspaceState.get<ProxyFormat>('proxyFormat','webm');
+  let lastDiff:ReturnType<typeof diffTimeline>|undefined;
   let watchers:vscode.Disposable[]=[];
   const events: any[]=[];
-  const record=(event:any)=>{events.push(event);if(events.length>200)events.shift();};
+  const record=(event:any)=>{events.push(event);if(events.length>200)events.shift();if(context.extensionMode===vscode.ExtensionMode.Test)console.log('CUTLINE EVENT',JSON.stringify(event));};
   const send=async(message:any)=>{if(panel&&!panel.webview.options.enableScripts)return;await panel?.webview.postMessage(message);};
   const fail=(e:unknown)=>send({type:'error',message:e instanceof Error?e.message:String(e)});
   async function getRoot() {
@@ -31,25 +33,27 @@ export function activate(context:vscode.ExtensionContext) {
     const proxies:Record<string,string>={};
     for(const source of new Set(t.clips.map(c=>c.source))) {
       if(token!==revision)return;
-      const file=await ensureProxy(root,source);
+      const file=await ensureProxy(root,source,proxyFormat);
       if(!panel)return;
       proxies[source]=panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();
     }
     const text=await transcripts(root);
     if(token!==revision||!panel)return;
-    shown=t;
-    const message={type:'timeline',revision:token,timeline:t,diff,proxies,transcripts:text,version};
+    shown=t;lastDiff=diff;
+    const message={type:'timeline',revision:token,timeline:t,diff,proxies,transcripts:text,version,format:proxyFormat};
     record({type:'sent',message});await send(message);await listVersions();
   }
   async function reload() {
     if(!ready)return;
+    const request=++loadRequest;
     try {
       const next=await readTimeline(root);
       await validateMedia(root,next);
-      const old=current;current=next;
+      if(request!==loadRequest)return;
+      const old=shown;current=next;
       if(selected) {await send({type:'status',message:'Current file changed. Viewing history; choose Current to return.'});await listVersions();return;}
       await display(next,old?diffTimeline(old,next):undefined);
-    } catch(e) {await fail(e);}
+    } catch(e) {if(request===loadRequest)await fail(e);}
   }
   async function open() {
     if(panel){panel.reveal(vscode.ViewColumn.Beside);return;}
@@ -66,15 +70,20 @@ export function activate(context:vscode.ExtensionContext) {
       record(m);
       try {
         if(m.type==='ready'){ready=true;await reload();}
+        if(m.type==='playback'&&m.event==='error'&&m.revision===revision&&proxyFormat==='webm'&&shown) {
+          proxyFormat='mp4';await send({type:'status',message:'This VS Code cannot decode WebM. Preparing H.264/MP3 compatibility proxies…'});
+          await display(shown,lastDiff,selected);
+        }
+        if(m.type==='playback'&&m.event==='canplay'&&m.revision===revision)await context.workspaceState.update('proxyFormat',proxyFormat);
         if(m.type==='current'){selected=undefined;await reload();}
         if(m.type==='versions')await listVersions();
         if(m.type==='preview') {const t=await history.version(root,m.hash);await display(t,undefined,m.hash);selected=m.hash;}
         if(m.type==='compare') {if(shown)await send({type:'comparison',diff:diffTimeline(shown,await readTimeline(root))});}
         if(m.type==='restore') {
           if(!selected)throw Error('Select a version first');
-          const t=await history.version(root,selected);await validateMedia(root,t);
+          const restoreHash=selected;const t=await history.version(root,restoreHash);await validateMedia(root,t);
           const answer=await vscode.window.showWarningMessage('Replace timeline.json with this version? Commit current edits first if you want to keep them.',{modal:true},'Restore');
-          if(answer==='Restore'){selected=undefined;await writeTimeline(root,t);await reload();}
+          if(answer==='Restore'){await history.restore(root,restoreHash);selected=undefined;await reload();}
         }
         if(m.type==='export')await doExport();
       } catch(e){await fail(e);}
@@ -92,7 +101,7 @@ export function activate(context:vscode.ExtensionContext) {
         const folder=await getRoot();const files=await vscode.window.showOpenDialog({canSelectMany:true,filters:{Video:['mp4','mov','mkv','webm','avi']}});if(!files)return;
         await fs.mkdir(path.join(folder,'sources'),{recursive:true});
         await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:`${BRAND}: Importing and generating proxies`},async()=>{
-          for(const f of files){const name=path.basename(f.fsPath),dest=path.join(folder,'sources',name);if(path.resolve(f.fsPath)!==path.resolve(dest))await fs.copyFile(f.fsPath,dest,1);await ensureProxy(folder,'sources/'+name);}
+          for(const f of files){const name=path.basename(f.fsPath),dest=path.join(folder,'sources',name);if(path.resolve(f.fsPath)!==path.resolve(dest))await fs.copyFile(f.fsPath,dest,1);await ensureProxy(folder,'sources/'+name,proxyFormat);}
         });
         void vscode.window.showInformationMessage('Imported. Add clips with vidcli or edit timeline.json.');
       }catch(e){void vscode.window.showErrorMessage(String(e));}
@@ -102,7 +111,7 @@ export function activate(context:vscode.ExtensionContext) {
     if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');
     const file=await sourcePath(root,source);
     await send({type:'codecProbe',url:panel!.webview.asWebviewUri(vscode.Uri.file(file)).toString()});
-  },dispose(){panel?.dispose();}};
+  },async testAction(action:string,data:object={}){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');await send({type:'testAction',action,...data});},dispose(){panel?.dispose();}};
 }
 function html(webview:vscode.Webview,uri:vscode.Uri) {
   const nonce=randomBytes(16).toString('hex');

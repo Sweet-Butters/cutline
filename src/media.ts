@@ -29,6 +29,7 @@ export async function validateMedia(root: string,t: Timeline) {
   return metadata;
 }
 export const PROXY_PROFILE='vp8-vorbis-640x360-24fps-v1';
+export type ProxyFormat='webm'|'mp4';
 export async function proxyKey(file: string, profile=PROXY_PROFILE) {
   const hash=createHash('sha256');hash.update(profile+'\0');
   for await(const chunk of createReadStream(file)) hash.update(chunk);
@@ -50,14 +51,15 @@ async function locked<T>(root:string,fn:()=>Promise<T>) {
   }
   try{return await fn();}finally{await handle.close();await fs.rm(lock,{force:true});}
 }
-export async function ensureProxy(root:string,source:string):Promise<string> {
-  const file=await sourcePath(root,source), key=await proxyKey(file);
-  const target=path.join(root,'.cutline-cache',key+'.webm');
+export async function ensureProxy(root:string,source:string,format:ProxyFormat='webm'):Promise<string> {
+  const file=await sourcePath(root,source), key=await proxyKey(file,format==='webm'?PROXY_PROFILE:'h264-mp3-640x360-24fps-v1');
+  const target=path.join(root,'.cutline-cache',key+'.'+format);
   return serial(()=>locked(root,async()=>{
     try {await fs.access(target);return target;} catch {}
-    const temp=target+'.'+randomUUID()+'.webm';
+    const temp=target+'.'+randomUUID()+'.'+format;
     try {
-      await run('ffmpeg',['-nostdin','-v','error','-y','-i',file,'-map','0:v:0','-map','0:a:0?','-vf','scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,fps=24','-c:v','libvpx','-deadline','realtime','-cpu-used','8','-threads','2','-b:v','700k','-c:a','libvorbis','-q:a','3',temp]);
+      const codecs=format==='webm'?['-c:v','libvpx','-deadline','realtime','-cpu-used','8','-threads','2','-b:v','700k','-c:a','libvorbis','-q:a','3']:['-c:v','libx264','-preset','veryfast','-crf','26','-threads','2','-pix_fmt','yuv420p','-c:a','libmp3lame','-b:a','96k','-movflags','+faststart'];
+      await run('ffmpeg',['-nostdin','-v','error','-y','-i',file,'-map','0:v:0','-map','0:a:0?','-vf','scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,fps=24',...codecs,temp]);
       await fs.rename(temp,target);return target;
     } finally {await fs.rm(temp,{force:true});}
   }));

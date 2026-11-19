@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {validate,diffTimeline,edit,writeTimeline,readTimeline,transcripts} from '../core';
 import {proxyKey,validateMedia,run} from '../media';
-import {version,versions,commit} from '../history';
+import {version,versions,restore} from '../history';
 const base=path.resolve(__dirname,'../..');
 const t=()=>validate({version:1,clips:[{id:'a',source:'sources/a.mp4',in:0,out:10},{id:'b',source:'sources/a.mp4',in:10,out:20}]});
 test('schema rejects invalid times, ids, and unsafe sources; accepts empty and fractional times',()=>{
@@ -28,7 +28,7 @@ test('proxy keys depend on bytes and profile, not path; Unicode paths work',asyn
   assert.equal(await proxyKey(a),await proxyKey(b));assert.notEqual(await proxyKey(a),await proxyKey(a,'new-profile'));const old=await proxyKey(a);await fs.writeFile(a,'abd');assert.notEqual(await proxyKey(a),old);
 });
 test('CLI process, media bounds, Unicode paths, transcripts and git round trip',async()=>{
-  const dir=path.join(base,'.test-data','한글 프로젝트');await fs.mkdir(path.join(dir,'sources'),{recursive:true});await fs.mkdir(path.join(dir,'transcripts'),{recursive:true});
+  await fs.mkdir(path.join(base,'.test-data'),{recursive:true});const dir=await fs.mkdtemp(path.join(base,'.test-data','한글 프로젝트 '));await fs.mkdir(path.join(dir,'sources'),{recursive:true});await fs.mkdir(path.join(dir,'transcripts'),{recursive:true});
   await fs.copyFile(path.join(base,'sample-project','sources','camera-1.mp4'),path.join(dir,'sources','영상 하나.mp4'));
   await writeTimeline(dir,{version:1,clips:[{id:'a',source:'sources/영상 하나.mp4',in:0,out:5}]});
   const cli=(...args:string[])=>run(process.execPath,[path.join(base,'tools','vidcli.js'),'--project',dir,...args]);
@@ -39,6 +39,9 @@ test('CLI process, media bounds, Unicode paths, transcripts and git round trip',
   const bad=await readTimeline(dir);bad.clips[0].source='sources/missing.mp4';await assert.rejects(()=>validateMedia(dir,bad),/ENOENT/);
   await run('git',['init'],dir);await run('git',['config','user.name','Test'],dir);await run('git',['config','user.email','test@example.invalid'],dir);
   await cli('commit','첫 버전');const list=await versions(dir);assert.ok(list.length);assert.deepEqual(await version(dir,list[0].hash),await readTimeline(dir));
+  await cli('trim','b','10','12');await restore(dir,list[0].hash);assert.equal((await readTimeline(dir)).clips[0].in,11);assert.equal((await readTimeline(dir)).clips[0].out,14);
   // Export a short clip through the real CLI and verify resulting container duration.
   const exported=(await cli('export')).trim();const info=JSON.parse(await run('ffprobe',['-v','error','-show_format','-of','json',exported]));assert.ok(Math.abs(Number(info.format.duration)-3)<.2);
+  await run('ffmpeg',['-nostdin','-v','error','-y','-i',path.join(dir,'sources','영상 하나.mp4'),'-t','1','-an','-c:v','copy',path.join(dir,'sources','무음.mp4')]);
+  await cli('add','silent','sources/무음.mp4','0','1');const joined=(await cli('export')).trim();const joinedInfo=JSON.parse(await run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',joined]));assert.ok(Math.abs(Number(joinedInfo.format.duration)-4)<.2);assert.equal(joinedInfo.streams.find((s:any)=>s.codec_type==='audio').codec_name,'aac');assert.equal(joinedInfo.streams.find((s:any)=>s.codec_type==='video').width,1280);
 });

@@ -1,5 +1,4 @@
-import * as path from 'node:path';
-import {run} from './media';
+import {run,validateMedia} from './media';
 import {validate,Timeline,writeTimeline} from './core';
 async function location(root:string) {
   const prefix=(await run('git',['rev-parse','--show-prefix'],root)).trim();
@@ -17,4 +16,7 @@ export async function commit(root:string,message:string) {
   if(!message.trim()) throw Error('Commit message required');
   await run('git',['add','--','timeline.json'],root);
   return run('git',['commit','--only','-m',message,'--','timeline.json'],root);
+}
+export async function restore(root:string,hash:string) {
+  const t=await version(root,hash);await validateMedia(root,t);await writeTimeline(root,t);return t;
 }

@@ -16,7 +16,7 @@ export async function main(argv:string[]) {
   else if(command==='validate') {await validateMedia(root,t);console.log('Timeline valid');}
   else if(['add','remove','trim','move'].includes(command)) {const next=edit(t,command,args);await validateMedia(root,next);await writeTimeline(root,next);console.log(`${command}: ${next.clips.length} clips, ${duration(next).toFixed(2)}s`);}
   else if(command==='commit') {await validateMedia(root,t);console.log(await commit(root,args.join(' ')));}
-  else if(command==='proxies') {for(const s of new Set(t.clips.map(c=>c.source))) console.log(await ensureProxy(root,s));}
+  else if(command==='proxies') {if(args[0]&&!['webm','mp4'].includes(args[0]))throw Error('Proxy format must be webm or mp4');for(const s of new Set(t.clips.map(c=>c.source))) console.log(await ensureProxy(root,s,args[0] as 'webm'|'mp4'|undefined));}
   else if(command==='export') console.log(await exportTimeline(root,t));
   else throw Error(`Unknown command: ${command}`);
 }

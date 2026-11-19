@@ -8,5 +8,6 @@ out/test/**
 out/tools/sample.*
 sample-project/**
 dist/**
+test-results/**
 **/*.map
 tsconfig.json

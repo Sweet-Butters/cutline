@@ -2,6 +2,6 @@
   "name": "cutline", "displayName": "Cutline", "description": "An agent-editable video timeline beside your code", "version": "0.1.0", "publisher": "cutline-local", "license": "MIT", "engines": {"vscode": "^1.100.0"},
   "main": "./out/extension.js", "categories": ["Other"], "activationEvents": ["workspaceContains:timeline.json"],
   "contributes": {"commands": [{"command":"cutline.open","title":"Open Video Panel"},{"command":"cutline.import","title":"Import Video Sources"},{"command":"cutline.export","title":"Export Video"}]},
-  "scripts": {"build":"tsc -p .", "test":"npm run build && node --test out/test/unit.js", "sample":"npm run build && node out/tools/sample.js", "test:integration":"npm run build && node out/test/run.js", "package":"npm run build && vsce package --no-dependencies --allow-missing-repository --out dist/cutline.vsix"},
+  "scripts": {"build":"tsc -p .", "test":"npm run build && node --test out/test/unit.js", "sample":"npm run build && node out/tools/sample.js", "test:integration":"npm run build && node out/test/run.js", "package":"npm run build && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links --out dist/cutline.vsix"},
   "devDependencies": {"@types/node":"^24.0.0","@types/vscode":"^1.100.0","typescript":"^5.9.0","@vscode/test-electron":"^2.5.2","@vscode/vsce":"^3.6.0"}
 }
