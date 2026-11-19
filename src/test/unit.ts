@@ -3,10 +3,36 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {validate,diffTimeline,edit,writeTimeline,readTimeline,transcripts} from '../core';
-import {proxyKey,validateMedia,run} from '../media';
+import {proxyKey,validateMedia,run,ensureProxy} from '../media';
+import {referenceMetrics} from '../reference';
 import {version,versions,restore} from '../history';
 const base=path.resolve(__dirname,'../..');
 const t=()=>validate({version:1,clips:[{id:'a',source:'sources/a.mp4',in:0,out:10},{id:'b',source:'sources/a.mp4',in:10,out:20}]});
+test('reference metrics use original source union, independent of edit order',()=>{
+  assert.equal(referenceMetrics(t(),t()).f1,1);
+  const human=t();human.clips=[{id:'h',source:'sources/a.mp4',in:10,out:30}];
+  const m=referenceMetrics(t(),human);assert.equal(m.overlap,10);assert.equal(m.precision,.5);assert.equal(m.recall,.5);assert.equal(m.f1,.5);
+  const repeated=t();repeated.clips.push({...repeated.clips[0],id:'repeat'});repeated.clips.reverse();
+  assert.equal(referenceMetrics(repeated,t()).f1,1);assert.equal(referenceMetrics(repeated,t()).aiDuration,30);
+  human.clips[0].source='sources/b.mp4';assert.equal(referenceMetrics(t(),human).f1,0);
+  const empty=validate({version:1,clips:[]});assert.equal(referenceMetrics(empty,empty).f1,1);assert.equal(referenceMetrics(empty,t()).f1,0);
+});
+test('launcher actually resolves explicit folders and preserves copied sample edits',async()=>{
+  if(process.platform==='win32')assert.match(await run('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(base,'app/test-launcher.ps1')]),/passed/);
+});
+test('workspace defaults hide internal files and open the agent terminal',async()=>{
+  const manifest=JSON.parse(await fs.readFile(path.join(base,'package.json'),'utf8'));
+  const excludes=manifest.contributes.configurationDefaults['files.exclude'];
+  for(const name of ['**/.cutline-cache','**/.git','**/node_modules','**/.timeline-*.tmp'])assert.equal(excludes[name],true);
+  assert.equal(manifest.contributes.configuration.properties['cutline.openTerminal'].default,true);
+});
+test('concurrent proxy requests share one generation and report progress',async()=>{
+  const dir=await fs.mkdtemp(path.join(base,'.test-data','proxy-'));await fs.mkdir(path.join(dir,'sources'));
+  await run('ffmpeg',['-nostdin','-v','error','-y','-i',path.join(base,'sample-project/sources/camera-1.mp4'),'-t','1','-c','copy',path.join(dir,'sources/a.mp4')]);
+  const messages:string[]=[];const first=ensureProxy(dir,'sources/a.mp4','webm',m=>messages.push(m));const second=ensureProxy(dir,'sources/a.mp4');assert.equal(first,second);
+  assert.equal(await first,await second);assert.ok(messages.some(m=>m.includes('Generating playback proxy')));
+  assert.equal((await fs.readdir(path.join(dir,'.cutline-cache'))).length,1);
+});
 test('schema rejects invalid times, ids, and unsafe sources; accepts empty and fractional times',()=>{
   for(const change of [{in:-1},{out:0},{out:Infinity},{in:'0'},{source:'../a.mp4'},{source:'sources/../a.mp4'},{source:'sources/C:/a.mp4'},{source:'sources/a\\b.mp4'},{id:''},{reason:42}]){const x=t();Object.assign(x.clips[0],change);assert.throws(()=>validate(x));}
   const dup=t();dup.clips[1].id='a';assert.throws(()=>validate(dup));assert.throws(()=>validate(null));assert.throws(()=>validate({version:2,clips:[]}));

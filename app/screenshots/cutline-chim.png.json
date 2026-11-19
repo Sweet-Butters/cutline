@@ -1,0 +1,11 @@
+﻿{
+    "canplay":  null,
+    "executable":  "D:\\orca\\projects\\video-ide\\app\\build\\Cutline\\VSCodium.exe",
+    "screenshot":  "app/screenshots/cutline-chim.png",
+    "proxyWorkerCount":  1,
+    "started":  "2026-11-20T06:00:28.4949352+09:00",
+    "cache":  "D:\\orca\\projects\\video-ide\\app\\temp\\verification-cache",
+    "pid":  81532,
+    "title":  "Cutline - project - Cutline",
+    "comparison":  "2026-11-20 06:00:35.999 [info] {\"root\":\"d:\\\\orca\\\\projects\\\\cutline-demo-chim\\\\project\",\"type\":\"referencesApplied\",\"items\":[{\"name\":\"human_edit.timeline.json\",\"metrics\":{\"aiKept\":7293.062676,\"humanKept\":1289.0093424036268,\"overlap\":1289.0093424036263,\"precision\":0.17674458587137834,\"recall\":0.9999999999999997,\"f1\":0.3003958343951065,\"aiDuration\":7293.062676,\"humanDuration\":1307.9800453514727}},{\"name\":\"starting.timeline.json\",\"metrics\":{\"aiKept\":7293.062676,\"humanKept\":7293.062676,\"overlap\":7293.062676,\"precision\":1,\"recall\":1,\"f1\":1,\"aiDuration\":7293.062676,\"humanDuration\":7293.062676}}],\"bars\":94}"
+}

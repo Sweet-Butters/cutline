@@ -9,6 +9,29 @@ const fmt=n=>{n=Math.max(0,n||0);return `${Math.floor(n/60).toString().padStart(
 const post=(type,data={})=>vscode.postMessage({type,...data});
 function banner(text){$('banner').textContent=text;$('banner').classList.remove('flash');void $('banner').offsetWidth;$('banner').classList.add('flash');}
 function diffText(d){return `Timeline changed: +${d.added.length} / −${d.removed.length} clips · ${d.trimmed.length} trimmed · ${d.moved.length} moved · ${fmt(d.before)} → ${fmt(d.after)}`;}
+let selectedReference='';
+function renderReferences(items){
+  const host=$('references');host.hidden=!items.length;host.replaceChildren();
+  const chosen=items.find(i=>i.name===selectedReference)||items[0];
+  if(items.length>1){const select=document.createElement('select');select.setAttribute('aria-label','Human reference timeline');for(const item of items){const option=document.createElement('option');option.value=item.name;option.textContent=item.name;select.append(option);}select.value=chosen.name;select.onchange=()=>{selectedReference=select.value;renderReferences(items);};host.append(select);}
+  for(const item of chosen?[chosen]:[]){
+    const title=document.createElement('div');title.className='section-title';title.textContent=`HUMAN vs AI · ORIGINAL SOURCE TIME · ${item.name}`;host.append(title);
+    const m=item.metrics,metrics=document.createElement('div');metrics.className='metrics';
+    metrics.textContent=`Precision ${(m.precision*100).toFixed(1)}% · Recall ${(m.recall*100).toFixed(1)}% · F1 ${(m.f1*100).toFixed(1)}%`;
+    const durations=document.createElement('p');durations.className='durations';durations.textContent=`AI ${fmt(m.aiDuration)} · Human ${fmt(m.humanDuration)} · Overlap ${fmt(m.overlap)} | Unique kept: AI ${fmt(m.aiKept)}, Human ${fmt(m.humanKept)}`;host.append(metrics,durations);
+    for(const source of item.sources){
+      const label=document.createElement('div');label.className='source-label';label.textContent=source.source;host.append(label);
+      for(const [key,name] of [['ai','AI edit'],['human','Human edit']]){
+        const row=document.createElement('div');row.className='reference-row';const label=document.createElement('b');label.textContent=name;
+        const strip=document.createElement('div');strip.className=`source-strip ${key}`;strip.setAttribute('aria-label',name+' on original source time');
+        for(const c of source[key]){const bar=document.createElement('span');bar.className='kept';bar.style.left=`${c.in/source.duration*100}%`;bar.style.width=`${(c.out-c.in)/source.duration*100}%`;bar.title=`${name}: ${fmt(c.in)} – ${fmt(c.out)}`;strip.append(bar);}
+        row.append(label,strip);host.append(row);
+      }
+      const axis=document.createElement('div');axis.className='source-axis';for(let i=0;i<=4;i++){const tick=document.createElement('span');tick.textContent=fmt(source.duration*i/4);axis.append(tick);}host.append(axis);
+    }
+  }
+  post('referencesApplied',{items:items.map(i=>({name:i.name,metrics:i.metrics})),bars:host.querySelectorAll('.kept').length});
+}
 function renderStrip(d){
   $('timeline').replaceChildren();$('ghosts').replaceChildren();
   timeline.clips.forEach((c,i)=>{
@@ -60,6 +83,7 @@ $('previous').onclick=()=>select(Math.max(0,index-1));$('next').onclick=()=>sele
 $('scrub').oninput=()=>{let n=Number($('scrub').value);for(let i=0;i<timeline.clips.length;i++){const c=timeline.clips[i],d=c.out-c.in;if(n<d||i===timeline.clips.length-1){select(i,c.in+n);break;}n-=d;}};
 for(const type of ['current','compare','restore','export'])$(type).onclick=()=>post(type);$('refresh').onclick=()=>post('versions');
 window.addEventListener('message',async({data:m})=>{
+  if(m.type==='references')renderReferences(m.items);
   if(m.type==='timeline'){
     const old=timeline.clips[index],oldTime=video.currentTime;
     timeline=m.timeline;proxies=m.proxies;transcripts=m.transcripts;revision=m.revision;

@@ -4,16 +4,16 @@
 
 배포 파일은 `app/dist/Cutline-win-x64.zip`입니다. 이 작업은 로컬 빌드만 제공하며 공개 다운로드 서버에는 업로드하지 않습니다. 제작자가 전달한 ZIP을 다운로드하고 **모두 압축 풀기**로 쓰기 가능한 폴더에 풀어 `Cutline/Cutline.exe`를 실행하세요. ZIP 안에서 직접 실행하지 마세요.
 
-Cutline은 VSCodium(MIT) + Cutline 확장(MIT)입니다. Microsoft 제품 브랜딩을 사용하지 않는 별도 런처이며, VSCodium 내부의 이름·라이선스는 원본 그대로 보존합니다. 서명되지 않은 해커톤 데모입니다. Windows x64와 PATH의 `ffmpeg`, `ffprobe`가 필요합니다. CLI 검증·버전 커밋에는 Node.js와 git도 필요합니다. 이 외부 도구와 Claude Code/Codex, 인증정보/API 키는 번들에 넣지 않습니다.
+Cutline은 VSCodium(MIT) + Cutline 확장(MIT)입니다. 실행 파일 아이콘·앱 이름·Windows 앱 식별자를 Cutline으로 변경하며, VSCodium LICENSE/ThirdPartyNotices는 보존합니다. 서명되지 않은 해커톤 데모입니다. Windows x64와 PATH의 `ffmpeg`, `ffprobe`가 필요합니다. CLI 검증·버전 커밋에는 Node.js와 git도 필요합니다. 이 외부 도구와 Claude Code/Codex, 인증정보/API 키는 번들에 넣지 않습니다.
 
-실행하면 복사된 `sample-project`의 `timeline.json`과 오른쪽 Cutline 영상 패널이 자동으로 열립니다. 첫 실행은 프록시 변환 때문에 잠시 걸릴 수 있습니다. 창 제목은 `Cutline`으로 시작하며, 설정과 확장은 번들의 `data/`에만 저장합니다. 기존 에디터 프로필과 분리됩니다. 번들을 이동할 때는 `data/`도 함께 옮기세요. 자동 열기를 끄려면 설정에서 `cutline.autoOpenPanel`을 false로 바꾸세요. 수동 **Open Video Panel** 명령은 계속 사용할 수 있습니다.
+첫 실행 시 샘플을 Windows 문서 폴더의 `Cutline/sample-project`로 복사해 열며 기존 샘플은 덮어쓰지 않습니다. CLI도 옆의 `Cutline/tools`, `Cutline/out`에 복사합니다. `timeline.json`, 오른쪽 영상 패널, 프로젝트 루트를 cwd로 하는 하단 터미널이 자동으로 열립니다. 첫 프록시 생성 중에는 읽기·변환 진행률을 표시합니다. 설정·확장·프록시 캐시는 번들의 `data/`에 저장합니다. 기존 에디터 프로필과 분리됩니다. 번들을 이동할 때는 `data/`도 함께 옮기세요. 자동 열기를 끄려면 `cutline.autoOpenPanel`, 터미널만 끄려면 `cutline.openTerminal`을 false로 바꾸세요. 수동 **Open Video Panel**, 상태 표시줄 **Ask agent**는 계속 사용할 수 있습니다.
 
 다른 프로젝트는 **File → Open Folder…** 또는 `Cutline.exe "D:\\my-video-project"`로 여세요. 번들에는 샘플의 초기 로컬 git 이력과 `tools/vidcli.js`도 포함되어 있습니다. 커밋할 때는 사용자의 git 이름·이메일 설정이 필요합니다.
 
 **다운로드 앱 데모 순서:**
 
 1. 압축을 풀고 `Cutline.exe`를 실행해 JSON·영상 패널·첫 프레임을 보여 줍니다.
-2. **Terminal → New Terminal** 또는 **Ctrl+`**로 통합 터미널을 엽니다. 현재 폴더가 번들의 `sample-project`인지 확인합니다.
+2. 자동으로 열린 하단 **Ask agent** 터미널에서 시작합니다. cwd는 현재 프로젝트 루트이며 터미널은 JSON 편집기 아래에 열립니다.
 3. 사용자 컴퓨터에 이미 설치·인증한 `claude` 또는 `codex`를 실행합니다. 앱이 에이전트를 자동 실행하거나 키를 요구하지 않습니다.
 4. 아래 촬영용 프롬프트를 입력합니다. 에이전트가 `timeline.json`을 저장하면 4분 → 3분 변화와 클립별 색상 표시를 보여 줍니다.
 5. **Play**, 대본 탐색, **Versions**, **Export MP4**를 차례로 보여 줍니다. 샘플 영상과 대본은 합성 데모 자료입니다.
@@ -25,7 +25,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File app/build.ps1 -Clean
 powershell -NoProfile -ExecutionPolicy Bypass -File app/verify-launch.ps1
 ```
 
-`-Clean`은 `app/build/Cutline` 전체(실행 후 생긴 샘플 변경·프로필 포함)를 교체합니다. 다운로드 캐시는 `app/downloads`에 두며 매번 SHA-256을 검증합니다. [공식 VSCodium 1.100.33714 릴리스](https://github.com/VSCodium/vscodium/releases/tag/1.100.33714)의 ZIP·게시된 `.sha256`·스크립트의 고정 해시가 모두 일치해야 빌드됩니다. 원본 LICENSE/ThirdPartyNotices, `ABOUT.md`, 확장 LICENSE를 포함합니다. 검증 스크립트는 실제 창과 `canplay` 로그를 확인하고 데스크톱 화면을 `app/screenshots/cutline-launch.png`에 저장한 뒤 자신이 연 번들 프로세스만 닫습니다. 빌드 ZIP에는 검증 과정에서 생성한 사용자 상태가 들어가지 않습니다.
+`-Clean`은 `app/build/Cutline` 전체(실행 후 생긴 샘플 변경·프로필 포함)를 교체합니다. 다운로드 캐시는 `app/downloads`에 두며 매번 SHA-256을 검증합니다. [공식 VSCodium 1.100.33714 릴리스](https://github.com/VSCodium/vscodium/releases/tag/1.100.33714)의 ZIP·게시된 `.sha256`·스크립트의 고정 해시가 모두 일치해야 빌드됩니다. 원본 LICENSE/ThirdPartyNotices, `ABOUT.md`, 확장 LICENSE를 포함합니다. 검증 스크립트는 실제 창과 `canplay` 로그를 확인하고 데스크톱 화면을 `app/screenshots/cutline-launch-2.png`에 저장한 뒤 자신이 연 번들 프로세스만 닫습니다. 빌드 ZIP에는 검증 과정에서 생성한 사용자 상태가 들어가지 않습니다.
 
 VS Code에서 `timeline.json`을 저장하면 옆의 영상 패널이 바로 반응합니다. Claude Code 또는 Codex가 JSON을 편집하며, 확장은 로컬 영상 재생·변경 표시·git 버전 탐색·내보내기를 담당합니다. 확장에서 AI 서비스 호출, 네트워크 요청, 텔레메트리를 하지 않습니다.
 
@@ -165,3 +165,22 @@ npm run package
 설치한 VSIX 자체를 검사하려면 `$env:CUTLINE_EXTENSION_PATH`에 격리된 설치 디렉터리(예: `.test-data/package-extensions/cutline-local.cutline-0.1.0`의 절대 경로)를 지정한 뒤 같은 통합 테스트를 실행합니다. 재생 자동화는 사용자 제스처 정책 때문에 음소거로 실행합니다.
 
 빌드 결과는 `out/`, VSIX는 `dist/cutline.vsix`입니다. VSIX에는 확장·CLI 실행 코드가 들어가고 테스트 영상은 용량을 줄이기 위해 포함하지 않습니다. 샘플은 이 저장소에서 여세요. 실행 검증 결과와 한계는 [검증 보고서](VERIFICATION.md)를 참고하세요.
+
+## Human vs AI 비교 트랙
+
+`reference/*.timeline.json`이 있으면 각 reference마다 파란 **AI edit**, 주황 **Human edit**을 같은 원본 시간축에 표시합니다. 스키마는 timeline.json과 같습니다. 여러 원본은 원본별 축을 쓰며 길이는 ffprobe의 실제 원본 길이입니다. 2시간 원본의 짧은 컷도 최소 1픽셀로 표시하고 hover로 정확한 구간을 확인합니다. 기존 편집 순서 클립 스트립도 유지합니다. 비교 트랙은 프록시가 완성되기 전부터 표시됩니다.
+
+- Precision = 교집합 초 / AI가 남긴 고유 원본 초
+- Recall = 교집합 초 / 사람이 남긴 고유 원본 초
+- F1 = 2 × 교집합 초 / (AI 고유 초 + Human 고유 초)
+- 겹치거나 반복되는 구간은 합집합으로 계산합니다. 총 재생 길이는 반복을 포함해 별도로 표시합니다. 양쪽 모두 비어 있으면 1, 한쪽만 비어 있으면 0입니다.
+
+현재 timeline.json과 reference 파일의 생성·수정·삭제를 감시합니다. Versions 프리뷰 중에도 비교 트랙의 AI는 현재 timeline.json입니다. 원본 구간 선택의 일치도이며 순서·자막·음악의 품질 점수는 아닙니다.
+
+`files.exclude` 기본값으로 `.cutline-cache`, `.git`, `node_modules`, 임시 timeline 파일을 숨깁니다. 사용자 설정으로 덮어쓸 수 있습니다. `cutline.openTerminal`의 기본값은 true이며 에이전트를 자동 실행하지 않습니다.
+
+런처의 첫 폴더 인수는 공백·한글 경로도 지원하며 존재하지 않으면 오류로 표시합니다. 인수 없이 실행할 때만 샘플을 복사합니다. `CUTLINE_DOCUMENTS`로 문서 폴더, `CUTLINE_CACHE_ROOT`로 프록시 루트를 지정할 수 있습니다. 번들 기본 캐시는 `data/cache`이며 프로젝트별로 분리합니다. 독립 VSIX/CLI는 환경변수가 없으면 프로젝트의 `.cutline-cache`를 사용합니다.
+
+같은 프로젝트·원본·형식의 동시 프록시 요청은 진행 중 작업을 공유합니다. 프로세스 간 파일 잠금 후 캐시를 다시 확인하므로 중복 변환하지 않습니다. 실제 코덱 재생 실패로 다른 형식이 필요한 경우에는 호환 변환을 수행합니다.
+
+촬영 검증은 `app/verify-launch.ps1`로 실행하며 기본 결과는 `app/screenshots/cutline-launch-2.png`입니다. 검증용 문서·캐시 위치를 저장소 안으로 지정해 다른 디렉터리를 변경하지 않습니다. `-Project "D:\path\project" -Screenshot cutline-chim.png -AllowPreparing`으로 긴 프로젝트의 변환 중 비교 트랙도 확인할 수 있습니다. 이 모드의 화면은 재생 완료 증거가 아니며 JSON 보고서의 canplay를 따로 확인하세요.

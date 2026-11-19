@@ -4,16 +4,26 @@ import * as path from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {BRAND} from './brand';
 import {Timeline,readTimeline,writeTimeline,diffTimeline,transcripts,sourcePath} from './core';
-import {ensureProxy,validateMedia,exportTimeline,ProxyFormat} from './media';
+import {ensureProxy,validateMedia,exportTimeline,ProxyFormat,cacheDirectory,stopMediaWorkers} from './media';
+import {readReferences,referenceMetrics,kept} from './reference';
 import * as history from './history';
 
 export function activate(context:vscode.ExtensionContext) {
+  context.subscriptions.push({dispose:stopMediaWorkers});
   const output=vscode.window.createOutputChannel('Cutline',{log:true});context.subscriptions.push(output);
   let panel:vscode.WebviewPanel|undefined, root='', current:Timeline|undefined, shown:Timeline|undefined, selected:string|undefined;
   let revision=0, loadRequest=0, ready=false, timer:NodeJS.Timeout|undefined;
   let proxyFormat:ProxyFormat=context.extensionMode===vscode.ExtensionMode.Test?'webm':context.workspaceState.get<ProxyFormat>('proxyFormat','webm');
   let lastDiff:ReturnType<typeof diffTimeline>|undefined;
   let watchers:vscode.Disposable[]=[];
+  let terminal:vscode.Terminal|undefined;
+  async function openTerminal(){
+    if(!terminal||terminal.exitStatus)terminal=vscode.window.createTerminal({name:'Ask agent',cwd:root||await getRoot()});
+    await vscode.commands.executeCommand('workbench.action.positionPanelBottom');
+    await vscode.commands.executeCommand('workbench.action.alignPanelCenter');
+    terminal.show(true);
+  }
+  const ask=vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left,100);ask.text='$(terminal) Ask agent';ask.command='cutline.askAgent';ask.show();context.subscriptions.push(ask,vscode.commands.registerCommand('cutline.askAgent',openTerminal));
   const events: any[]=[];
   const record=(event:any)=>{events.push(event);if(events.length>200)events.shift();if(context.extensionMode===vscode.ExtensionMode.Test)console.log('CUTLINE EVENT',JSON.stringify(event));};
   const send=async(message:any)=>{if(panel&&!panel.webview.options.enableScripts)return;await panel?.webview.postMessage(message);};
@@ -34,7 +44,7 @@ export function activate(context:vscode.ExtensionContext) {
     const proxies:Record<string,string>={};
     for(const source of new Set(t.clips.map(c=>c.source))) {
       if(token!==revision)return;
-      const file=await ensureProxy(root,source,proxyFormat);
+      const file=await ensureProxy(root,source,proxyFormat,message=>{if(token===revision)void send({type:'status',message:`${source} · ${message}`});});
       if(!panel)return;
       proxies[source]=panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();
     }
@@ -52,6 +62,11 @@ export function activate(context:vscode.ExtensionContext) {
       await validateMedia(root,next);
       if(request!==loadRequest)return;
       const old=shown;current=next;
+      const references=await readReferences(root);
+      const metadata=await validateMedia(root,next);
+      for(const reference of references)for(const [source,meta] of await validateMedia(root,reference.timeline))metadata.set(source,meta);
+      if(request!==loadRequest)return;
+      await send({type:'references',items:references.map(r=>({name:r.name,metrics:referenceMetrics(next,r.timeline),sources:[...metadata].map(([source,meta])=>({source,duration:meta.duration,ai:kept(next,source),human:kept(r.timeline,source)}))}))});
       if(selected) {await send({type:'status',message:'Current file changed. Viewing history; choose Current to return.'});await listVersions();return;}
       await display(next,old?diffTimeline(old,next):undefined);
     } catch(e) {if(request===loadRequest)await fail(e);}
@@ -59,7 +74,7 @@ export function activate(context:vscode.ExtensionContext) {
   async function open(folder?:string) {
     if(panel){panel.reveal(vscode.ViewColumn.Beside);return;}
     root=folder??await getRoot();current=undefined;shown=undefined;selected=undefined;ready=false;
-    panel=vscode.window.createWebviewPanel('cutline.video',BRAND,vscode.ViewColumn.Beside,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(path.join(root,'.cutline-cache')),vscode.Uri.file(path.join(root,'sources')),vscode.Uri.joinPath(context.extensionUri,'media')]});
+    panel=vscode.window.createWebviewPanel('cutline.video',BRAND,vscode.ViewColumn.Beside,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(cacheDirectory(root)),vscode.Uri.file(path.join(root,'sources')),vscode.Uri.joinPath(context.extensionUri,'media')]});
     panel.webview.html=html(panel.webview,context.extensionUri);
     panel.onDidDispose(()=>{panel=undefined;ready=false;++revision;if(timer)clearTimeout(timer);watchers.forEach(w=>w.dispose());watchers=[];});
     const watch=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'timeline.json'));
@@ -67,9 +82,12 @@ export function activate(context:vscode.ExtensionContext) {
     watchers.push(watch,watch.onDidChange(schedule),watch.onDidCreate(schedule),watch.onDidDelete(schedule));
     const tw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'transcripts/**/*.json'));
     watchers.push(tw,tw.onDidChange(schedule),tw.onDidCreate(schedule),tw.onDidDelete(schedule));
+    const rw=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'reference/*.timeline.json'));
+    watchers.push(rw,rw.onDidChange(schedule),rw.onDidCreate(schedule),rw.onDidDelete(schedule));
     panel.webview.onDidReceiveMessage(async m=>{
       record(m);
       if(m.type==='playback')output.info(JSON.stringify({root,...m}));
+      if(m.type==='referencesApplied')output.info(JSON.stringify({root,...m}));
       try {
         if(m.type==='ready'){ready=true;await reload();}
         if(m.type==='playback'&&m.event==='error'&&m.revision===revision&&proxyFormat==='webm'&&shown) {
@@ -90,6 +108,7 @@ export function activate(context:vscode.ExtensionContext) {
         if(m.type==='export')await doExport();
       } catch(e){await fail(e);}
     },undefined,context.subscriptions);
+    if(vscode.workspace.getConfiguration('cutline',vscode.Uri.file(root)).get('openTerminal',true))await openTerminal();
   }
   async function doExport() {
     const folder=root||await getRoot();
@@ -115,7 +134,15 @@ export function activate(context:vscode.ExtensionContext) {
       const timeline=vscode.Uri.joinPath(folder.uri,'timeline.json');
       try {await vscode.workspace.fs.stat(timeline);}catch{continue;}
       await vscode.window.showTextDocument(timeline,{viewColumn:vscode.ViewColumn.One,preview:false});
-      await open(folder.uri.fsPath);return true;
+      await open(folder.uri.fsPath);
+      if(!context.workspaceState.get('layoutInitialized')){
+        await vscode.commands.executeCommand('workbench.action.focusSideBar');
+        for(let i=0;i<2;i++)await vscode.commands.executeCommand('workbench.action.decreaseViewSize');
+        await vscode.commands.executeCommand('vscode.setEditorLayout',{orientation:0,groups:[{size:0.46},{size:0.54}]});
+        await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+        await context.workspaceState.update('layoutInitialized',true);
+      }
+      return true;
     }
     return false;
   }
@@ -127,6 +154,7 @@ export function activate(context:vscode.ExtensionContext) {
     await send({type:'codecProbe',url:panel!.webview.asWebviewUri(vscode.Uri.file(file)).toString()});
   },async testAction(action:string,data:object={}){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');await send({type:'testAction',action,...data});},dispose(){panel?.dispose();}};
 }
+export function deactivate(){stopMediaWorkers();}
 function html(webview:vscode.Webview,uri:vscode.Uri) {
   const nonce=randomBytes(16).toString('hex');
   const script=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','panel.js'));
@@ -134,7 +162,7 @@ function html(webview:vscode.Webview,uri:vscode.Uri) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};"><link rel="stylesheet" href="${style}"></head><body>
   <header><b>${BRAND}</b><span class="badge">AGENT VIDEO WORKSPACE</span><button id="export">Export MP4</button></header>
   <div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
-  <main><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
+  <main><section id="references" hidden aria-label="Human versus AI original time comparison"></section><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
   <div class="transport"><button id="play">▶ Play</button><button id="previous">⏮</button><button id="next">⏭</button><span id="time">00:00 / 00:00</span><span id="clip"></span></div>
   <input id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Timeline position">
   <div class="section-title">TIMELINE <span>green added · red removed · amber trimmed · blue moved</span></div><div id="timeline"></div><div id="ghosts"></div><p id="reason"></p>

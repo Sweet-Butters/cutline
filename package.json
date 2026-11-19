@@ -28,6 +28,10 @@
       {
         "command": "cutline.export",
         "title": "Export Video"
+      },
+      {
+        "command": "cutline.askAgent",
+        "title": "Ask agent: Open Terminal"
       }
     ],
     "configuration": {
@@ -37,7 +41,20 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically open timeline.json and the Video Panel when opening a video project."
+        },
+        "cutline.openTerminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open a terminal at the project root below the timeline editor."
         }
+      }
+    },
+    "configurationDefaults": {
+      "files.exclude": {
+        "**/.cutline-cache": true,
+        "**/.git": true,
+        "**/.timeline-*.tmp": true,
+        "**/node_modules": true
       }
     }
   },

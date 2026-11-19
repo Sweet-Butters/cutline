@@ -1,0 +1,47 @@
+{
+  "bundle": {
+    "path": "app/dist/Cutline-win-x64.zip",
+    "sha256": "51DC8EB70C3A44CE24838CA17F58EED11729471A65911E2420218D5A44C32104"
+  },
+  "realProject": {
+    "humanDurationSeconds": 1307.9800453514727,
+    "screenshot": "app/screenshots/cutline-chim.png",
+    "path": "D:/orca/projects/cutline-demo-chim/project",
+    "precision": 0.17674458587137834,
+    "f1": 0.3003958343951065,
+    "fullProxyCompletionVerified": false,
+    "playbackVerified": false,
+    "access": "Read only; no project files or project cache written by this task",
+    "originalSeconds": 7293.062676,
+    "visibleProgressPercent": 6.8,
+    "recall": 1,
+    "proxyWorkerCount": 1,
+    "cache": "app/temp/verification-cache"
+  },
+  "notes": [
+    "Default launcher uses Windows Documents/Cutline/sample-project, verified with repository-local Documents override.",
+    "Upstream licenses and third-party notices preserved.",
+    "ZIP built before launch; verification state is not included.",
+    "Local commit only; no push."
+  ],
+  "integration": {
+    "report": "app/screenshots/integration-report-2.json",
+    "passed": true,
+    "command": "npm run test:integration"
+  },
+  "cleanup": "Only this verification launch and its proxy worker were stopped; other job left running",
+  "date": "2026-11-20",
+  "unitTests": {
+    "failed": 0,
+    "passed": 9,
+    "command": "npm test"
+  },
+  "sample": {
+    "windowAndTaskbarIcon": "Cutline, visually verified on real desktop",
+    "playbackCanplay": true,
+    "documentsOverride": ".test-data/Documents",
+    "screenshot": "app/screenshots/cutline-launch-2.png",
+    "installationWarning": false,
+    "terminal": "Open at project root, below editor area"
+  }
+}

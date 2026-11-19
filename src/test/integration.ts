@@ -9,9 +9,14 @@ async function until<T>(fn:()=>T,description:string,timeout=180000):Promise<NonN
 export async function run(){
   const root=process.env.CUTLINE_TEST_ROOT!,sample=path.join(root,'sample-project'),file=path.join(sample,'timeline.json');
   const original=await fs.readFile(file,'utf8');
+  const referenceFile=path.join(sample,'reference','integration.timeline.json');await fs.mkdir(path.dirname(referenceFile),{recursive:true});await fs.writeFile(referenceFile,original);
   const extension=vscode.extensions.getExtension('cutline-local.cutline');assert.ok(extension);const api=await extension.activate();
   try{
     assert.equal(await api.startup,true,'Automatically opens a timeline project');
+    assert.ok(vscode.window.terminals.some(t=>t.name==='Ask agent'),'Agent terminal opens');
+    assert.equal(vscode.workspace.getConfiguration('files').get<Record<string,boolean>>('exclude')?.['**/.cutline-cache'],true);
+    const reference=await until(()=>api.events.find((e:any)=>e.type==='referencesApplied'&&e.items.some((i:any)=>i.name==='integration.timeline.json')),'reference track rendered');
+    assert.equal(reference.items.find((i:any)=>i.name==='integration.timeline.json').metrics.f1,1);
     await until(()=>vscode.window.visibleTextEditors.some(e=>e.document.uri.fsPath.toLowerCase()===file.toLowerCase()&&e.viewColumn===vscode.ViewColumn.One),'Timeline automatically opens in main editor',10000);
     const first=await until(()=>api.events.find((e:any)=>e.type==='applied'),'webview received first timeline');assert.equal(first.clipCount,4);
     assert.ok(vscode.window.tabGroups.all.some(g=>g.viewColumn!==vscode.ViewColumn.One&&g.tabs.some(t=>t.input instanceof vscode.TabInputWebview)),'Panel opened beside editor');
@@ -23,6 +28,7 @@ export async function run(){
     const changedAt=Date.now();await writeTimeline(sample,t);
     const applied=await until(()=>api.events.find((e:any)=>e.type==='applied'&&e.diff?.added?.some((c:any)=>c.id==='new-hook')),'webview acknowledged live diff');
     const diffLatencyMs=Date.now()-changedAt;
+    await until(()=>api.events.some((e:any)=>e.type==='referencesApplied'&&e.items.some((i:any)=>i.name==='integration.timeline.json'&&i.metrics.aiDuration===160&&i.metrics.f1<1)),'reference metrics update live');
     assert.equal(applied.diff.added.length,1);assert.equal(applied.diff.removed.length,1);assert.equal(applied.diff.trimmed.length,1);assert.equal(applied.diff.before,240);assert.equal(applied.diff.after,160);assert.equal(applied.ghosts,1);assert.equal(applied.blocks,4);assert.match(applied.banner,/04:00 → 02:40/);
     const snapshot=async(tag:string)=>{await api.testAction('snapshot',{tag});return until(()=>api.events.find((e:any)=>e.type==='snapshot'&&e.tag===tag),tag,10000);};
     await api.testAction('transcript',{index:1});await new Promise(r=>setTimeout(r,500));const transcript=await snapshot('transcript-seek');assert.ok(transcript.time>=20&&transcript.time<21);assert.match(transcript.transcript,/문제/);
@@ -55,5 +61,5 @@ export async function run(){
     } finally {await config.update('autoOpenPanel',oldSetting,vscode.ConfigurationTarget.Global);}
     const report={autoOpen:true,optOut:true,manualOpenWithOptOut:true,noTimeline:true,vscode:vscode.version,extensionPath:extension.extensionPath,diffLatencyMs,proxy:{format:applied.format,metadata,canplay,playback},webmErrors:api.events.filter((e:any)=>e.type==='playback'&&e.event==='error'),h264:codec,diff:applied,transcript,preview,comparison,beside:true,invalidJsonPreservesPanel:true};
     await fs.writeFile(path.join(root,'.test-data','integration-report.json'),JSON.stringify(report,null,2));console.log('CUTLINE INTEGRATION PASSED',JSON.stringify(report));
-  }finally{await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
+  }finally{await fs.rm(referenceFile,{force:true});await fs.writeFile(path.join(root,'.test-data','integration-events.json'),JSON.stringify(api.events,null,2));await fs.writeFile(file,original);api.dispose();}
 }

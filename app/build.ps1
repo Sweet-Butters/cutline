@@ -30,6 +30,13 @@ Write-Host "Verified official VSCodium $version SHA-256: $published"
 New-Item -ItemType Directory -Force $bundle | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::ExtractToDirectory($archive,$bundle)
+Add-Type -Path "$PSScriptRoot/BrandIcon.cs"
+[BrandIcon]::Replace("$bundle/VSCodium.exe","$PSScriptRoot/Cutline.ico")
+Copy-Item "$PSScriptRoot/Cutline.ico" "$bundle/resources/app/resources/win32/code.ico" -Force
+$productPath="$bundle/resources/app/product.json"
+$product=Get-Content $productPath -Raw | ConvertFrom-Json
+$product.nameShort='Cutline';$product.nameLong='Cutline';$product.win32AppUserModelId='Cutline.VideoIDE'
+$product | ConvertTo-Json -Depth 100 | Set-Content $productPath -Encoding UTF8
 Push-Location $root
 try { & npm.cmd run package;CheckExit 'VSIX packaging' }finally{Pop-Location}
 New-Item -ItemType Directory -Force "$bundle/data/user-data/User","$bundle/data/extensions","$bundle/data/tmp" | Out-Null
@@ -39,7 +46,9 @@ $settings=@{
  'telemetry.telemetryLevel'='off';'update.mode'='none';'extensions.autoUpdate'=$false;'extensions.autoCheckUpdates'=$false;
  'security.workspace.trust.enabled'=$false;'git.openRepositoryInParentFolders'='never';'git.autofetch'=$false;
  'editor.minimap.enabled'=$false;'workbench.activityBar.location'='hidden';'window.commandCenter'=$false;
- 'cutline.autoOpenPanel'=$true
+ 'cutline.autoOpenPanel'=$true;'cutline.openTerminal'=$true;'window.titleBarStyle'='native';
+ 'workbench.panel.defaultLocation'='bottom';'workbench.panel.opensMaximized'='never';
+ 'files.exclude'=@{'**/.cutline-cache'=$true;'**/.git'=$true;'**/node_modules'=$true;'**/.timeline-*.tmp'=$true}
 }
 $settings | ConvertTo-Json | Set-Content "$bundle/data/user-data/User/settings.json" -Encoding UTF8
 $savedPortable=$env:VSCODE_PORTABLE
