@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {createHash} from 'node:crypto';
-import {Timeline,Clip,Segment,transcripts,sourcePath} from './core';
+import {Timeline,Clip,Segment,transcripts,sourcePath,duration} from './core';
 import {probe} from './media';
 
 export type Range = [number,number];
@@ -32,7 +32,7 @@ export function evaluate(t:Timeline,input:Inputs):Result[] {
   const overlaps=clips.filter((c,i)=>clips.some((d,j)=>i!==j&&c.source===d.source&&Math.min(c.out,d.out)>Math.max(c.in,d.in)));
   add('duplicate-spans','hard',duplicate>.5?'WARN':'PASS','중복 재생 초 / 전체 재생 초 ≤ 0.5',{seconds:total-unique,share:duplicate},overlaps.map(c=>offense(c)),duplicate>.5?'같은 원본 구간의 중복이 50%를 넘습니다':'중복 재생 비율이 허용 범위입니다');
   const target=spec?.targetDuration??style?.targetDuration;
-  if(target)add('duration','hard',inside(total,target)?'PASS':'FAIL',target,total,inside(total,target)?[]:clips.map(c=>offense(c)),'전체 편집 길이 검사');
+  if(target){const seconds=duration(t);add('duration','hard',inside(seconds,target)?'PASS':'FAIL',target,seconds,inside(seconds,target)?[]:clips.map(c=>offense(c)),'전체 편집 길이 검사');}
   else missing('duration','hard','목표 길이 사양 없음');
   if(spec?.minClipLength!==undefined||spec?.maxClipLength!==undefined){const range:Range=[spec.minClipLength??0,spec.maxClipLength??Infinity],bad=clips.filter(c=>!inside(c.out-c.in,range));add('clip-length','hard',bad.length?'FAIL':'PASS',{min:spec.minClipLength??null,max:spec.maxClipLength??null},clips.map(c=>({clipId:c.id,seconds:c.out-c.in})),bad.map(c=>offense(c)),'개별 클립 최소·최대 길이 검사');}
   else missing('clip-length','hard','클립 길이 사양 없음');

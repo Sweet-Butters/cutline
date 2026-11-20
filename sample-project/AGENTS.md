@@ -8,7 +8,8 @@ This folder is a video project. Read style.md before editing. No paid APIs or up
 - id: unique stable letters/digits/underscore/hyphen, at most 80 chars. Preserve ids on trims/moves; use new ids for new selections so the panel highlights changes correctly.
 - source: forward-slash relative path beneath sources/, no .. or absolute paths.
 - transcripts/<source filename including extension>.json: [{"start":0,"end":20,"text":"..."}]. Nested directories mirror sources/. These sample transcripts are fictional.
-- An empty clips array is valid. No transitions, overlays, speed changes, volume mixing, or separate audio tracks in schema v1.
+- An empty clips array is valid. A clips-only timeline is the original sequential cut schema. Multitrack UI edits also save an optional `sequence` with video/audio/caption tracks, source ranges and timeline start times, links, overlays, markers and volume automation. Preserve it when present. Transitions and speed changes are not supported.
+- When `sequence` exists, prefer `node ../tools/vidcli.js sequence '{"action":"trim","ids":["clip-id"],"edge":"out","delta":-1,"linked":true}'`. The shared engine preserves tracks, checks locks/collisions/media bounds and updates the compatibility clips array. Do not replace an existing sequence with only clips.
 - timeline.json saves reload the VS Code panel automatically. Write complete valid JSON atomically when possible. Do not modify the extension.
 
 From this sample folder, CLI: node ../tools/vidcli.js COMMAND (run npm run build in repository root first).

@@ -6,6 +6,7 @@ out/
 dist/
 **/.cutline-cache/
 **/exports/
+**/.cutline/feedback/
 *.log
 
 app/build/
