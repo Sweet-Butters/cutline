@@ -1,0 +1,10 @@
+/* Real subscription smoke test; no project files or credentials are copied. */
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+const {HelperChat}=require('../out/helper');
+(async()=>{
+  const root=path.resolve(__dirname,'..');await fs.mkdir(path.join(root,'.test-data'),{recursive:true});const dir=await fs.mkdtemp(path.join(root,'.test-data/helper-real-')),working=await fs.mkdtemp(path.join(require('node:os').tmpdir(),'cutline-helper-real-')); const file=path.join(dir,'timeline.json'),original='{"version":1,"clips":[]}\n';await fs.writeFile(file,original);
+  let saved;const chat=new HelperChat(undefined,async state=>{saved=state;},()=>{}),report={passed:false,checks:[]};const timer=setTimeout(()=>void chat.stop(),120000);
+  try{await chat.setEnabled(true);await chat.ask('영상 편집이 처음이에요. 타임라인이 무엇인지 쉬운 한국어 두 문장으로만 설명해 주세요.','codex',{project:'도우미 검증용',preview:false},working);let view=chat.view();assert.equal(view.messages.at(-1)?.role,'assistant',view.messages.at(-1)?.text);assert.match(view.messages.at(-1).text,/[가-힣]/);assert.ok(saved.sessions.codex);report.checks.push('actual Codex subscription generated a Korean beginner explanation');
+    await chat.ask('그럼 컷 편집은 무엇인가요? 한 문장으로만 설명해 주세요.','codex',{project:'도우미 검증용',preview:false},working);view=chat.view();assert.equal(view.messages.at(-1)?.role,'assistant',view.messages.at(-1)?.text);assert.equal(await fs.readFile(file,'utf8'),original);report.checks.push('real helper session resumes for a follow-up and leaves the project file unchanged');report.passed=true;report.answers=view.messages.filter(m=>m.role==='assistant').map(m=>m.text);
+  }catch(error){report.error=String(error);throw error;}finally{clearTimeout(timer);await fs.mkdir(path.join(root,'test-results'),{recursive:true});await fs.writeFile(path.join(root,'test-results/helper-real-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}
+})().catch(error=>{console.error(String(error));process.exitCode=1;});

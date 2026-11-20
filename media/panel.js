@@ -5,6 +5,7 @@ let timeline={clips:[]}, proxies={}, transcripts={}, index=0, playing=false, rev
 let mediaGeneration=0;
 let timelineEditor;
 let feedbackUI,displayedTimelineId;
+let helperUI,helperBusy=false;
 video.crossOrigin='anonymous';
 const advanced=()=>!!timeline.sequence&&!!timelineEditor;
 const total=()=>advanced()?CutlineSequence.duration(timelineEditor.seq):timeline.clips.reduce((n,c)=>n+c.out-c.in,0);
@@ -22,12 +23,13 @@ function editButtons(){for(const id of ['split','delete'])$(id).disabled=chatBus
 function manual(action,data={}){if(chatBusy||editBusy||historyPreview)return;playing=false;video.pause();timelineEditor?.player.pause();editBusy=true;editButtons();post('manual',{action,revision,id:timeline.clips[index]?.id,at:video.currentTime,...data});}
 for(const action of ['split','delete','undo','redo'])$(action).onclick=()=>manual(action);
 function chatMessage(kind,text){const el=document.createElement('div');el.className='message '+kind;el.textContent=text;$('messages').append(el);while($('messages').children.length>300)$('messages').firstChild.remove();$('messages').scrollTop=$('messages').scrollHeight;}
-function busy(value){chatBusy=value;for(const id of ['send','backend','new-chat'])$(id).disabled=value;$('stop').disabled=!value;editButtons();}
+function headerButtons(){for(const id of ['backend','new-chat'])$(id).disabled=chatBusy||helperBusy;}
+function busy(value){chatBusy=value;$('send').disabled=value;headerButtons();$('stop').disabled=!value;editButtons();}
 $('chat-form').onsubmit=e=>{e.preventDefault();const prompt=$('prompt').value.trim();if(!prompt||chatBusy)return;post('agentSend',{prompt,backend:$('backend').value});$('prompt').value='';};
 $('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('chat-form').requestSubmit();}};
 $('stop').onclick=()=>{post('agentStop');$('stop').disabled=true;};
 $('backend').onchange=()=>post('agentBackend',{backend:$('backend').value});
-$('new-chat').onclick=()=>post('agentNew');
+$('new-chat').onclick=()=>post(helperUI?.enabled?'helperNew':'agentNew');
 setInterval(()=>{if(chatBusy)$('elapsed').textContent=`편집 중 · ${Math.floor((Date.now()-chatStarted)/1000)}초`;},500);
 function banner(text){$('banner').textContent=text;$('banner').classList.remove('flash');void $('banner').offsetWidth;$('banner').classList.add('flash');}
 function diffText(d){return `Timeline changed: +${d.added.length} / −${d.removed.length} clips · ${d.trimmed.length} trimmed · ${d.moved.length} moved · ${fmt(d.before)} → ${fmt(d.after)}`;}
@@ -138,16 +140,18 @@ function feedbackContext(){
 }
 feedbackUI=new CutlineFeedback({host:$('feedback-panel'),saved:vscode.getState()?.feedback,context:feedbackContext,onState:value=>vscode.setState({...vscode.getState(),feedback:value}),onRequest:request=>post('feedbackRequest',{...request,viewVersionId:displayedTimelineId,viewRevision:revision}),onLoad:()=>post('feedbackRequest',{action:'load',requestId:crypto.randomUUID()}),onCurrent:()=>post('current')});
 $('toggle-feedback').onclick=()=>feedbackUI.toggle();
+helperUI=new CutlineHelper({host:$('helper-panel'),toggle:$('helper-toggle'),draft:vscode.getState()?.helperDraft,saveDraft:value=>vscode.setState({...vscode.getState(),helperDraft:value}),request:(type,data)=>post(type,{...data,backend:$('backend').value,...(type==='helperSend'?{time:feedbackContext().time}:{})}),busyChanged:value=>{helperBusy=value;headerButtons();},modeChanged:enabled=>{$('new-chat').title=enabled?'새 도우미 대화':'새 편집 대화';}});
 for(const type of ['current','compare','restore','export'])$(type).onclick=()=>post(type);$('refresh').onclick=()=>post('versions');
 window.addEventListener('message',async({data:m})=>{
   if(['feedbackState','feedbackResult','feedbackError'].includes(m.type))feedbackUI.receive(m);
   if(m.type==='feedbackSeek'){
-    if(m.viewVersionId!==displayedTimelineId||m.renderRevision!==revision){feedbackUI.receive({type:'feedbackResult',requestId:m.requestId,ok:false,message:'表示中の編集バージョンが変わったため移動を中止しました。'.replace('表示中の編集バージョンが変わったため移動を中止しました。','보는 편집 버전이 바뀌어 이동을 취소했습니다.')});post('feedbackSeekBlocked',{requestId:m.requestId});}
+    if(m.viewVersionId!==displayedTimelineId||m.renderRevision!==revision){feedbackUI.receive({type:'feedbackResult',requestId:m.requestId,ok:false,message:'보는 편집 버전이 바뀌어 이동을 취소했습니다.'});post('feedbackSeekBlocked',{requestId:m.requestId});}
     else{try{playing=false;video.pause();timelineEditor.player.pause();seekTimeline(m.start);feedbackUI.receive({type:'feedbackResult',requestId:m.requestId,ok:true,action:'navigate'});post('feedbackSeekApplied',{requestId:m.requestId,viewVersionId:displayedTimelineId,time:m.start,end:m.end,renderRevision:revision});}catch(error){feedbackUI.receive({type:'feedbackResult',requestId:m.requestId,ok:false,message:error.message});}}
   }
   if(m.type==='checklistUnavailable'){$('check-summary').textContent='검증 미완료 · timeline / 입력 오류';$('check-results').replaceChildren();}
   if(m.type==='checklist')renderChecklist(m.report);
   if(m.type==='focusChat')$('prompt').focus();
+  if(m.type==='helperState'||m.type==='helperError')helperUI.receive(m);
   if(m.type==='chatInit'){$('backend').value=m.backend;for(const text of m.prompts||[]){const b=document.createElement('button');b.type='button';b.textContent=text;b.onclick=()=>{$('prompt').value=text;$('prompt').focus();};$('chips').append(b);}post('chatReady');}
   if(m.type==='chatEvent'){
     if(m.kind==='start'){busy(true);chatStarted=m.started;chatMessage('user',m.text);}
@@ -186,6 +190,11 @@ window.addEventListener('message',async({data:m})=>{
     probe.oncanplay=()=>finish({decoded:true});probe.onerror=()=>finish({decoded:false,code:probe.error?.code,message:probe.error?.message});probe.src=m.url;probe.load();setTimeout(()=>finish({decoded:false,timeout:true}),15000);
   }
   if(m.type==='testAction'){
+    if(m.action==='helperSnapshot')post('helperSnapshot',{tag:m.tag,...helperUI.snapshot(),editorMessages:$('messages').textContent,editorPrompt:$('prompt').value});
+    if(m.action==='helperToggle')$('helper-toggle').click();
+    if(m.action==='helperSend'){$('backend').value=m.backend||'codex';helperUI.input.value=m.prompt;helperUI.form.requestSubmit();}
+    if(m.action==='helperStop')$('helper-panel').querySelector('.helper-stop').click();
+    if(m.action==='editorDraft')$('prompt').value=m.value;
     if(m.action==='feedbackSnapshot')post('feedbackSnapshot',{tag:m.tag,...feedbackUI.snapshot(),context:feedbackContext()});
     if(m.action==='feedbackOpen')feedbackUI.setOpen(m.open!==false);
     if(m.action==='feedbackFill'){const field=$('feedback-panel').querySelector(m.selector);if(field){field.focus();field.value=m.value;field.dispatchEvent(new Event(m.event||'input',{bubbles:true}));}}

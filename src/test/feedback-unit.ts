@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import {Timeline,writeTimeline} from '../core';
 import {run} from '../media';
 import {captureAnchor,resolveAnchor,timelineId} from '../feedback-anchor';
-import {FeedbackStore,FeedbackConflict,FeedbackLocationError,FEEDBACK_STATUSES,FeedbackMutation} from '../feedback';
+import {FeedbackStore,FeedbackConflict,FeedbackLocationError,FEEDBACK_STATUSES,FeedbackMutation,validateFeedback} from '../feedback';
 import {sequenceModel} from '../sequence';
 const hashes={'sources/a.mp4':'a'.repeat(64),'sources/b.mp4':'b'.repeat(64),'sources/renamed.mp4':'a'.repeat(64)};
 const v1=():Timeline=>({version:1,clips:[{id:'intro',source:'sources/b.mp4',in:0,out:70},{id:'scene',source:'sources/a.mp4',in:100,out:140}]});
@@ -66,6 +66,41 @@ test('concurrent windows detect stale writes instead of dropping a comment',asyn
   const dir=await fixture(),a=new FeedbackStore(dir),b=new FeedbackStore(dir);const before=await a.view(v1());
   const make=(body:string)=>input(before,'create',{body,status:'수정 요청',start:80,versionId:timelineId(v1())});
   const results=await Promise.allSettled([a.mutate(make('첫 창'),v1()),b.mutate(make('두 번째 창'),v1())]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);const rejected=results.find(r=>r.status==='rejected') as PromiseRejectedResult;assert.ok(rejected.reason instanceof FeedbackConflict);assert.equal((await a.view(v1())).threads.length,1);
+});
+test('deleting a thread persists, removes replies, rejects stale changes and preserves other feedback',async()=>{
+  const dir=await fixture(),store=new FeedbackStore(dir),other=new FeedbackStore(dir),before=await fs.readFile(path.join(dir,'timeline.json'),'utf8');let view=await store.view(v1());
+  view=await store.mutate(input(view,'create',{body:'삭제할 댓글',status:'수정 요청',start:80,versionId:timelineId(v1())}),v1());const threadId=view.threads[0].id;
+  view=await store.mutate(input(view,'reply',{threadId,body:'연결된 답글'}),v1());
+  view=await store.mutate(input(view,'reply',{threadId,parentId:view.threads[0].replies[0].id,body:'연결된 대댓글'}),v1());
+  view=await store.mutate(input(view,'create',{body:'보존할 댓글',status:'보류',start:10,versionId:timelineId(v1())}),v1());
+  const stale=input(view,'delete',{threadId});view=await other.mutate(input(view,'status',{threadId,status:'편집 중'}),v1());
+  await assert.rejects(store.mutate(stale,v1()),FeedbackConflict);assert.equal((await store.view(v1())).threads[0].replies.length,2);
+  const kept=structuredClone(view.threads[1]),versions=structuredClone(view.versions),remove=input(view,'delete',{threadId});
+  view=await store.mutate(remove,v1());assert.equal(view.threads.length,1);assert.deepEqual(view.threads[0],kept);assert.deepEqual(view.versions,versions);
+  const revision=view.revision;await store.mutate(remove,v1());view=await new FeedbackStore(dir).view(v1());assert.equal(view.revision,revision);assert.deepEqual(view.threads,[kept]);
+  const disk=JSON.parse(await fs.readFile(path.join(store.directory,'state.json'),'utf8'));assert.equal(disk.threads.some((t:any)=>t.id===threadId),false);assert.equal(JSON.stringify(disk).includes('연결된 대댓글'),false);
+  await assert.rejects(store.navigation(threadId,v1()),/없습니다/);await assert.rejects(store.mutate(input(view,'reply',{threadId,body:'오래된 창의 답글'}),v1()),/찾을 수 없습니다/);
+  assert.equal(await fs.readFile(path.join(dir,'timeline.json'),'utf8'),before);
+});
+test('editing a comment preserves context, persists after restart and rejects invalid or stale edits',async()=>{
+  const dir=await fixture(),store=new FeedbackStore(dir),before=await fs.readFile(path.join(dir,'timeline.json'),'utf8');let view=await store.view(v1());
+  view=await store.mutate(input(view,'create',{body:'원래 의견',status:'수정 요청',start:80,versionId:timelineId(v1())}),v1());const threadId=view.threads[0].id;
+  view=await store.mutate(input(view,'reply',{threadId,body:'보존할 답글'}),v1());const original=structuredClone(view.threads[0]);
+  view=await store.mutate(input(view,'profile',{name:'수정 담당자',role:'편집 제안자'}),v1());const stale=input(view,'edit',{threadId,body:'오래된 수정'}),edit=input(view,'edit',{threadId,body:'  반응 장면을 조금 더 보여 주세요  '});
+  view=await store.mutate(edit,v1());const edited=view.threads[0];assert.equal(edited.body,'반응 장면을 조금 더 보여 주세요');assert.ok(edited.editedAt);assert.equal(edited.createdAt,original.createdAt);assert.deepEqual(edited.author,original.author);assert.deepEqual(edited.anchors,original.anchors);assert.deepEqual(edited.replies,original.replies);assert.equal(edited.status,original.status);assert.equal(edited.events.at(-1)!.type,'edited');assert.equal(edited.events.at(-1)!.author.name,'수정 담당자');
+  const revision=view.revision;await store.mutate(edit,v1());assert.equal((await store.view(v1())).revision,revision);await store.mutate(input(view,'edit',{threadId,body:edited.body}),v1());assert.equal((await store.view(v1())).revision,revision);
+  const disk=await fs.readFile(path.join(store.directory,'state.json'),'utf8');for(const body of ['   ','x'.repeat(5001)])await assert.rejects(store.mutate(input(view,'edit',{threadId,body}),v1()),/1~5000/);assert.equal(await fs.readFile(path.join(store.directory,'state.json'),'utf8'),disk);
+  await assert.rejects(store.mutate(stale,v1()),FeedbackConflict);const restarted=await new FeedbackStore(dir).view(v2());assert.equal(restarted.threads[0].body,edited.body);assert.equal(restarted.threads[0].editedAt,edited.editedAt);assert.equal(restarted.threads[0].resolution.state,'linked');assert.equal(await fs.readFile(path.join(dir,'timeline.json'),'utf8'),before);
+});
+test('version numbers migrate legacy snapshots once and stay stable across restarts and navigation',async()=>{
+  const dir=await fixture(),store=new FeedbackStore(dir);let view=await store.view(v1());assert.equal(view.viewVersion.number,1);
+  view=await store.mutate(input(view,'create',{body:'기존 댓글',status:'수정 요청',start:80,versionId:timelineId(v1())}),v1());view=await store.view(v2());assert.equal(view.viewVersion.number,2);
+  const file=path.join(store.directory,'state.json'),legacy=JSON.parse(await fs.readFile(file,'utf8')),keys=[timelineId(v1()),timelineId(v2())],threads=structuredClone(legacy.threads);
+  delete legacy.versions[keys[0]].number;delete legacy.versions[keys[1]].number;legacy.versions[keys[0]].createdAt='2026-01-01T00:00:00.000Z';legacy.versions[keys[1]].createdAt='2026-01-02T00:00:00.000Z';legacy.versions=Object.fromEntries(Object.entries(legacy.versions).reverse());await fs.writeFile(file,JSON.stringify(legacy));
+  const restarted=new FeedbackStore(dir);view=await restarted.view(v2());assert.equal(view.viewVersion.number,2);assert.equal(view.versions.find(v=>v.id===keys[0])!.number,1);assert.equal(view.revision,legacy.revision+1);
+  const revision=view.revision;assert.equal((await restarted.view(v1())).viewVersion.number,1);assert.equal((await new FeedbackStore(dir).view(v2())).revision,revision);
+  const third=v2();third.clips[0].out=20;assert.equal((await restarted.view(third)).viewVersion.number,3);view=await restarted.view(v1());assert.equal(view.viewVersion.number,1);assert.deepEqual((JSON.parse(await fs.readFile(file,'utf8'))).threads,threads);assert.equal((await restarted.navigation(threads[0].id,v2())).resolution.start,35);
+  const invalid=JSON.parse(await fs.readFile(file,'utf8'));invalid.versions[keys[1]].number=1;assert.throws(()=>validateFeedback(invalid),/버전 번호/);
 });
 test('snapshots link only to Git commits with matching timeline contents; corruption is preserved',async()=>{
   const dir=await fixture();await run('git',['init'],dir);await run('git',['config','user.name','테스트'],dir);await run('git',['config','user.email','test@example.invalid'],dir);await run('git',['config','commit.gpgsign','false'],dir);await run('git',['add','timeline.json'],dir);await run('git',['commit','-m','첫 편집 기록'],dir);

@@ -78,6 +78,9 @@
     "sample": "npm run build && node out/tools/sample.js",
     "test:integration": "npm run build && node out/test/run.js",
     "test:sequence": "npm run build && node tools/test-sequence.js",
+    "test:feedback": "npm run build && node tools/test-feedback.js",
+    "test:helper": "npm run build && node tools/test-helper.js",
+    "test:helper:real": "npm run build && node tools/test-helper-real.js",
     "prepackage": "node -e \"require('node:fs').mkdirSync('dist', { recursive: true })\"",
     "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links --out dist/cutline.vsix",
     "test:agents": "npm run build && node tools/test-real-agents.js"

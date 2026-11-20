@@ -17,6 +17,7 @@ import {prepareSequenceAssets} from './sequence-media';
 import {probe} from './media';
 import {FeedbackStore,FeedbackConflict} from './feedback';
 import {timelineId} from './feedback-anchor';
+import {HelperChat} from './helper';
 
 export function activate(context:vscode.ExtensionContext) {
   context.subscriptions.push({dispose:stopMediaWorkers});
@@ -33,9 +34,11 @@ export function activate(context:vscode.ExtensionContext) {
   let agent:AgentRun|undefined, agentBefore:Timeline|undefined, agentPrompt='', finishing=false;
   let backend:Backend=context.globalState.get<Backend>('agentBackend','claude');
   const sessions:Partial<Record<Backend,string>>=context.workspaceState.get('agentSessions',{});
+  let helper:HelperChat|undefined;
+  const helperDirectory=path.join((context.storageUri??context.globalStorageUri).fsPath,'helper-workspace');
   const edits=new EditSession();let editQueue=Promise.resolve();
   const chat=(event:any)=>{record({type:'chatEvent',...event});return send({type:'chatEvent',...event});};
-  context.subscriptions.push({dispose:()=>{void agent?.stop();}});
+  context.subscriptions.push({dispose:()=>{void agent?.stop();void helper?.stop();}});
   async function captureAgent(next:Timeline){
     if(!agentBefore||same(agentBefore,next))return;
     const before=agentBefore;agentBefore=structuredClone(next);edits.clear();
@@ -107,7 +110,8 @@ export function activate(context:vscode.ExtensionContext) {
         if(m.mode==='current'){target=await readTimeline(root);targetId=timelineId(target);}
         if(m.mode==='original'){targetId=await store.originalVersion(m.threadId);target=await store.snapshot(targetId);}
         const navigation=await store.navigation(m.threadId,target,m.mode==='original');
-        if(store!==feedback||ticket!==feedbackNavigation)return;
+        if(store!==feedback)return;
+        if(ticket!==feedbackNavigation)throw Error('다른 버전 이동 요청으로 취소되었습니다. 현재 화면에서 다시 시도하세요.');
         if((m.mode==='current'||m.mode==='view'&&!selected&&!feedbackPreview)&&timelineId(await readTimeline(root))!==targetId)throw Error('편집 내용이 변경되어 이동을 취소했습니다. 다시 시도하세요.');
         const switchView=targetId!==docId||m.mode==='current'&&!!(selected||feedbackPreview);
         if(switchView){
@@ -190,13 +194,14 @@ export function activate(context:vscode.ExtensionContext) {
     if(agent||finishing)throw Error('에이전트 종료를 기다린 후 패널을 다시 여세요');
     edits.clear();
     root=folder??await getRoot();current=undefined;shown=undefined;selected=undefined;feedbackPreview=undefined;ready=false;feedback=new FeedbackStore(root);++feedbackNavigation;
+    const helperChat:HelperChat=new HelperChat(context.workspaceState.get('beginnerHelper'),async state=>{if(helper===helperChat)await context.workspaceState.update('beginnerHelper',state);},state=>{if(helper===helperChat)void send({type:'helperState',state});},()=>new AgentRun(context.extensionMode===vscode.ExtensionMode.Test&&process.env.CUTLINE_HELPER_TEST_NODE&&process.env.CUTLINE_HELPER_TEST_CLI?async()=>({file:process.env.CUTLINE_HELPER_TEST_NODE!,prefix:[process.env.CUTLINE_HELPER_TEST_CLI!]}):undefined));helper=helperChat;
     const transport=await playbackServer();
     const existingPanel=panel as vscode.WebviewPanel|undefined;
     if(existingPanel){transport.dispose();existingPanel.reveal(vscode.ViewColumn.One);return;}
     playback=transport;
     panel=vscode.window.createWebviewPanel('cutline.video',BRAND,vscode.ViewColumn.One,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(cacheDirectory(root)),vscode.Uri.file(path.join(root,'sources')),vscode.Uri.joinPath(context.extensionUri,'media')]});
     panel.webview.html=html(panel.webview,context.extensionUri,playback.origin);
-    panel.onDidDispose(()=>{void agent?.stop();transport.dispose();playback=undefined;panel=undefined;ready=false;feedback=undefined;++feedbackNavigation;++feedbackLoad;++revision;if(timer)clearTimeout(timer);if(feedbackTimer)clearTimeout(feedbackTimer);watchers.forEach(w=>w.dispose());watchers=[];});
+    panel.onDidDispose(()=>{void agent?.stop();void helper?.stop();helper=undefined;transport.dispose();playback=undefined;panel=undefined;ready=false;feedback=undefined;++feedbackNavigation;++feedbackLoad;++revision;if(timer)clearTimeout(timer);if(feedbackTimer)clearTimeout(feedbackTimer);watchers.forEach(w=>w.dispose());watchers=[];});
     const watch=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'timeline.json'));
     const schedule=()=>{if(timer)clearTimeout(timer);timer=setTimeout(()=>void reload(),180);};
     watchers.push(watch,watch.onDidChange(schedule),watch.onDidCreate(schedule),watch.onDidDelete(schedule));
@@ -217,7 +222,16 @@ export function activate(context:vscode.ExtensionContext) {
       if(m.type==='layout')output.info(JSON.stringify({root,...m}));
       try {
         if(m.type==='feedbackRequest'){void handleFeedback(m);return;}
-        if(m.type==='ready'){ready=true;let chips;try{chips=await prompts(root);}catch(e){await chat({kind:'error',text:String(e)});}await send({type:'chatInit',backend,prompts:chips});await reload();}
+        if(['helperToggle','helperSend','helperStop','helperNew'].includes(m.type)){
+          const active=helper;if(!active)return;
+          try{
+            if(m.type==='helperToggle'){if(typeof m.enabled!=='boolean')throw Error('도우미 설정을 확인하세요.');await active.setEnabled(m.enabled);}
+            if(m.type==='helperStop')await active.stop();
+            if(m.type==='helperNew')await active.clear();
+            if(m.type==='helperSend'){await fs.mkdir(helperDirectory,{recursive:true});void active.ask(m.prompt,m.backend,{project:path.basename(root),timeline:shown?structuredClone(shown):undefined,time:m.time,preview:!!(selected||feedbackPreview)},helperDirectory).catch(error=>{if(helper===active)void send({type:'helperError',message:String(error)});});}
+          }catch(error){await send({type:'helperError',message:error instanceof Error?error.message:String(error)});}return;
+        }
+        if(m.type==='ready'){ready=true;let chips;try{chips=await prompts(root);}catch(e){await chat({kind:'error',text:String(e)});}await send({type:'chatInit',backend,prompts:chips});if(helper)await send({type:'helperState',state:helper.view()});await reload();}
         if(m.type==='agentSend')void startAgent(m.prompt,m.backend).catch(e=>chat({kind:'error',text:String(e)}));
         if(m.type==='agentStop')await agent?.stop();
         if(m.type==='agentBackend'&&(m.backend==='claude'||m.backend==='codex')){backend=m.backend;await context.globalState.update('agentBackend',backend);}
@@ -325,12 +339,14 @@ function html(webview:vscode.Webview,uri:vscode.Uri,playbackOrigin:string) {
   const timelineScript=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','timeline.js'));
   const feedbackStyle=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','feedback.css'));
   const feedbackScript=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','feedback.js'));
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} ${playbackOrigin} data:; connect-src ${playbackOrigin}; media-src ${webview.cspSource} ${playbackOrigin} blob:;"><link rel="stylesheet" href="${style}"><link rel="stylesheet" href="${timelineStyle}"><link rel="stylesheet" href="${feedbackStyle}"></head><body>
+  const helperStyle=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','helper.css'));
+  const helperScript=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','helper.js'));
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} ${playbackOrigin} data:; connect-src ${playbackOrigin}; media-src ${webview.cspSource} ${playbackOrigin} blob:;"><link rel="stylesheet" href="${style}"><link rel="stylesheet" href="${timelineStyle}"><link rel="stylesheet" href="${feedbackStyle}"><link rel="stylesheet" href="${helperStyle}"></head><body>
   <header><b>${BRAND}</b><span class="badge">AGENT VIDEO WORKSPACE</span><button id="toggle-chat" title="에이전트 채팅 접기/펼치기" aria-expanded="true">채팅</button><button id="toggle-feedback" title="우측 편집 피드백 패널 열기/닫기" aria-expanded="false">피드백</button><button id="export">Export MP4</button></header>
-  <div class="workspace"><aside id="chat" aria-label="Agent chat"><div class="chat-heading"><b>편집 에이전트</b><select id="backend" aria-label="Agent backend"><option value="claude">Claude</option><option value="codex">Codex</option></select><button id="new-chat" title="새 대화">＋</button></div><p class="chat-hint">원하는 편집을 말해 주세요.<br>내 구독으로 편집하고, 변경은 영상에 바로 반영됩니다.</p><div id="messages" role="log" aria-live="polite"></div><div id="chips"></div><form id="chat-form"><textarea id="prompt" aria-label="편집 요청" placeholder="어떤 영상을 만들까요?" rows="3" maxlength="20000"></textarea><div class="chat-actions"><span id="elapsed">준비됨</span><button id="stop" type="button" disabled>중단</button><button id="send" type="submit">보내기 ↑</button></div></form></aside><div class="video-workspace"><div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
+  <div class="workspace"><aside id="chat" aria-label="Agent chat"><div class="chat-heading"><b>편집 에이전트</b><select id="backend" aria-label="Agent backend"><option value="claude">Claude</option><option value="codex">Codex</option></select><button id="new-chat" title="새 대화">＋</button></div><div class="helper-mode-row"><span>초보자 도우미</span><button id="helper-toggle" type="button" role="switch" aria-checked="false" aria-label="초보자 도우미 켜기/끄기"><span class="helper-switch" aria-hidden="true"></span><span class="helper-toggle-label">꺼짐</span></button></div><section id="helper-panel" aria-label="초보자 도우미 채팅" hidden></section><p class="chat-hint">원하는 편집을 말해 주세요.<br>내 구독으로 편집하고, 변경은 영상에 바로 반영됩니다.</p><div id="messages" role="log" aria-live="polite"></div><div id="chips"></div><form id="chat-form"><textarea id="prompt" aria-label="편집 요청" placeholder="어떤 영상을 만들까요?" rows="3" maxlength="20000"></textarea><div class="chat-actions"><span id="elapsed">준비됨</span><button id="stop" type="button" disabled>중단</button><button id="send" type="submit">보내기 ↑</button></div></form></aside><div class="video-workspace"><div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
   <main><div class="monitor-area"><details id="checklist"><summary id="check-summary">검증 중…</summary><div id="check-results"></div></details><section class="preview"><video id="video" preload="auto" playsinline></video><canvas id="sequence-preview" width="1280" height="720" hidden aria-label="합성 영상 미리보기"></canvas><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>
   <div class="transport"><button id="play">▶ Play</button><button id="previous">⏮</button><button id="next">⏭</button><span id="time">00:00 / 00:00</span><span id="clip"></span></div>
   <input id="scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Timeline position"></div>
   <section id="editing-workspace" aria-label="멀티트랙 편집 타임라인"></section><div id="timeline" hidden></div><div class="edit-tools" hidden><button id="split">분할 S</button><button id="delete">삭제 Del</button><button id="undo" disabled>↶ 되돌리기</button><button id="redo" disabled>↷ 다시 실행</button></div><details class="inspection-area"><summary>비교 · 대본 · 버전 기록</summary><div id="ghosts"></div><p id="reason"></p>
-  <section id="references" hidden aria-label="Human versus AI original time comparison"></section><details><summary>대본 · 버전 기록</summary><div class="columns"><section><div class="section-title">TRANSCRIPT · click to seek</div><div id="transcript"></div></section><section><div class="section-title">VERSIONS <button id="refresh">↻</button></div><button id="current">Current</button><button id="compare">Diff vs current</button><button id="restore" disabled>Restore</button><div id="version-label"></div><div id="versions"></div></section></div></details></details></main></div><aside id="feedback-panel" aria-label="편집 피드백 협업 패널" aria-hidden="true"></aside></div><script nonce="${nonce}" src="${model}"></script><script nonce="${nonce}" src="${timelineScript}"></script><script nonce="${nonce}" src="${feedbackScript}"></script><script nonce="${nonce}" src="${script}"></script></body></html>`;
+  <section id="references" hidden aria-label="Human versus AI original time comparison"></section><details><summary>대본 · 버전 기록</summary><div class="columns"><section><div class="section-title">TRANSCRIPT · click to seek</div><div id="transcript"></div></section><section><div class="section-title">VERSIONS <button id="refresh">↻</button></div><button id="current">Current</button><button id="compare">Diff vs current</button><button id="restore" disabled>Restore</button><div id="version-label"></div><div id="versions"></div></section></div></details></details></main></div><aside id="feedback-panel" aria-label="편집 피드백 협업 패널" aria-hidden="true"></aside></div><script nonce="${nonce}" src="${model}"></script><script nonce="${nonce}" src="${timelineScript}"></script><script nonce="${nonce}" src="${feedbackScript}"></script><script nonce="${nonce}" src="${helperScript}"></script><script nonce="${nonce}" src="${script}"></script></body></html>`;
 }

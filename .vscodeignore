@@ -14,3 +14,7 @@ tsconfig.json
 
 app/**
 tools/test-real-agents.js
+tools/test-feedback.js
+
+tools/test-helper.js
+tools/test-helper-real.js

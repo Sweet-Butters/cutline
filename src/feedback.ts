@@ -11,13 +11,13 @@ export const FEEDBACK_STATUSES=['수정 요청','편집 중','수정 완료','�
 export type FeedbackStatus=typeof FEEDBACK_STATUSES[number];
 export interface FeedbackAuthor {id:string;name:string;role:'편집자'|'편집 제안자'}
 export interface GitReference {hash:string;message:string;date?:string}
-export interface FeedbackVersion {id:string;createdAt:string;duration:number;git:GitReference[]}
+export interface FeedbackVersion {id:string;createdAt:string;duration:number;git:GitReference[];number?:number}
 export interface AnchorEntry {id:string;anchor:FeedbackAnchor;author:FeedbackAuthor;at:string;note:string}
 export interface FeedbackReply {id:string;parentId?:string;body:string;author:FeedbackAuthor;at:string}
-export interface FeedbackEvent {id:string;type:'created'|'status'|'relinked';at:string;author:FeedbackAuthor;from?:FeedbackStatus;to?:FeedbackStatus;note?:string;anchorId?:string}
-export interface FeedbackThread {id:string;body:string;author:FeedbackAuthor;createdAt:string;updatedAt:string;status:FeedbackStatus;anchors:AnchorEntry[];replies:FeedbackReply[];events:FeedbackEvent[]}
+export interface FeedbackEvent {id:string;type:'created'|'status'|'relinked'|'edited';at:string;author:FeedbackAuthor;from?:FeedbackStatus;to?:FeedbackStatus;note?:string;anchorId?:string}
+export interface FeedbackThread {id:string;body:string;author:FeedbackAuthor;createdAt:string;updatedAt:string;editedAt?:string;status:FeedbackStatus;anchors:AnchorEntry[];replies:FeedbackReply[];events:FeedbackEvent[]}
 export interface FeedbackData {schemaVersion:1;revision:number;profile:FeedbackAuthor;versions:Record<string,FeedbackVersion>;threads:FeedbackThread[];requests:string[]}
-export interface FeedbackMutation {action:'create'|'reply'|'status'|'relink'|'profile';requestId:string;expectedRevision:number;threadId?:string;parentId?:string;body?:string;status?:FeedbackStatus;start?:number;end?:number;clipId?:string;name?:string;role?:FeedbackAuthor['role'];note?:string;versionId?:string}
+export interface FeedbackMutation {action:'create'|'reply'|'status'|'relink'|'profile'|'delete'|'edit';requestId:string;expectedRevision:number;threadId?:string;parentId?:string;body?:string;status?:FeedbackStatus;start?:number;end?:number;clipId?:string;name?:string;role?:FeedbackAuthor['role'];note?:string;versionId?:string}
 const hex=(s:unknown):s is string=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s);
 const id=(s:unknown):s is string=>typeof s==='string'&&/^[\w-]{1,100}$/.test(s);
 const text=(s:unknown,max:number)=>typeof s==='string'&&s.trim().length>0&&s.length<=max;
@@ -28,11 +28,16 @@ export class FeedbackLocationError extends Error {constructor(public resolution:
 export function validateFeedback(value:unknown):FeedbackData{
   const d=value as FeedbackData;
   if(!d||d.schemaVersion!==1||!Number.isSafeInteger(d.revision)||d.revision<0||!author(d.profile)||!d.versions||Array.isArray(d.versions)||!Array.isArray(d.threads)||!Array.isArray(d.requests)||d.requests.some(x=>!id(x)))throw Error('피드백 저장 형식이 올바르지 않습니다. 기존 파일은 보존했습니다.');
-  for(const [key,v] of Object.entries(d.versions))if(!hex(key)||key!==v.id||!Number.isFinite(v.duration)||v.duration<0||!Array.isArray(v.git)||v.git.some(g=>!/^[a-f0-9]{40}$/.test(g.hash)||typeof g.message!=='string'))throw Error('피드백 버전 기록이 올바르지 않습니다.');
+  const numbers=new Set<number>();
+  for(const [key,v] of Object.entries(d.versions)){
+    if(!hex(key)||key!==v.id||!Number.isFinite(v.duration)||v.duration<0||!Array.isArray(v.git)||v.git.some(g=>!/^[a-f0-9]{40}$/.test(g.hash)||typeof g.message!=='string'))throw Error('피드백 버전 기록이 올바르지 않습니다.');
+    if(v.number!==undefined){if(!Number.isSafeInteger(v.number)||v.number<1||numbers.has(v.number))throw Error('피드백 버전 번호가 올바르지 않습니다.');numbers.add(v.number);}
+  }
   const threadIds=new Set<string>();
   for(const t of d.threads){
     if(!id(t.id)||threadIds.has(t.id)||!text(t.body,5000)||!author(t.author)||!status(t.status)||!Array.isArray(t.anchors)||!t.anchors.length||!Array.isArray(t.replies)||!Array.isArray(t.events))throw Error('피드백 스레드가 올바르지 않습니다.');
     threadIds.add(t.id);
+    if(t.editedAt!==undefined&&(typeof t.editedAt!=='string'||!Number.isFinite(Date.parse(t.editedAt))))throw Error('댓글 수정 시각이 올바르지 않습니다.');
     for(const entry of t.anchors){
       const a=entry.anchor;
       if(!id(entry.id)||!author(entry.author)||!a||!hex(a.versionId)||!d.versions[a.versionId]||!Number.isFinite(a.start)||a.start<0||a.end!==undefined&&(!Number.isFinite(a.end)||a.end<=a.start)||!Array.isArray(a.spans))throw Error('피드백 위치 기록이 올바르지 않습니다.');
@@ -40,7 +45,7 @@ export function validateFeedback(value:unknown):FeedbackData{
     }
     const replyIds=new Set<string>();
     for(const r of t.replies){if(!id(r.id)||replyIds.has(r.id)||!text(r.body,5000)||!author(r.author)||r.parentId!==undefined&&!replyIds.has(r.parentId))throw Error('답글 연결이 올바르지 않습니다.');replyIds.add(r.id);}
-    for(const e of t.events)if(!id(e.id)||!author(e.author)||!['created','status','relinked'].includes(e.type)||e.from!==undefined&&!status(e.from)||e.to!==undefined&&!status(e.to))throw Error('상태 변경 이력이 올바르지 않습니다.');
+    for(const e of t.events)if(!id(e.id)||!author(e.author)||!['created','status','relinked','edited'].includes(e.type)||e.from!==undefined&&!status(e.from)||e.to!==undefined&&!status(e.to))throw Error('상태 변경 이력이 올바르지 않습니다.');
   }
   return d;
 }
@@ -104,7 +109,10 @@ export class FeedbackStore {
     t=validate(structuredClone(t));const key=timelineId(t),git=await this.gitReference(t,gitHint);
     return this.transact(async data=>{
       let changed=false,v=data.versions[key];
-      if(!v){v={id:key,createdAt:new Date().toISOString(),duration:duration(t),git:[]};
+      const versions=Object.values(data.versions);let next=versions.reduce((max,item)=>Math.max(max,item.number??0),0);
+      // Assign legacy records once, in the order they were first observed.
+      for(const item of versions.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)))if(item.number===undefined){item.number=++next;changed=true;}
+      if(!v){v={id:key,createdAt:new Date().toISOString(),duration:duration(t),git:[],number:++next};
         const file=path.join(this.directory,'snapshots',key+'.json');
         try{const existing=validate(JSON.parse(await fs.readFile(file,'utf8')));if(timelineId(existing)!==key)throw Error('기존 피드백 스냅샷이 손상되었습니다.');}
         catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')await this.atomic(file,t);else throw e;}
@@ -140,11 +148,19 @@ export class FeedbackStore {
         if(!text(input.body,5000)||!status(input.status))throw Error('댓글과 상태를 확인하세요.');if(data.threads.length>=2000)throw Error('프로젝트의 피드백 스레드가 너무 많습니다.');
         const anchor=captureAnchor(t,input.start!,input.end,hashes,input.clipId),entry:AnchorEntry={id:randomUUID(),anchor,author:by,at:now,note:'작성 시 위치'};
         data.threads.push({id:randomUUID(),body:input.body!.trim(),author:by,createdAt:now,updatedAt:now,status:input.status,anchors:[entry],replies:[],events:[{id:eventId,type:'created',at:now,author:by,to:input.status,anchorId:entry.id}]});
+      }else if(input.action==='delete'){
+        const index=data.threads.findIndex(thread=>thread.id===input.threadId);
+        if(index<0)throw Error('피드백 스레드를 찾을 수 없습니다.');
+        data.threads.splice(index,1);
       }else{
         const thread=data.threads.find(x=>x.id===input.threadId);if(!thread)throw Error('피드백 스레드를 찾을 수 없습니다.');
         if(input.action==='reply'){
           if(!text(input.body,5000)||input.parentId&&!thread.replies.some(r=>r.id===input.parentId))throw Error('답글 내용과 대상을 확인하세요.');if(thread.replies.length>=500)throw Error('이 스레드에 답글을 더 추가할 수 없습니다.');
           thread.replies.push({id:randomUUID(),...(input.parentId?{parentId:input.parentId}:{}),body:input.body!.trim(),author:by,at:now});
+        }else if(input.action==='edit'){
+          if(!text(input.body,5000))throw Error('댓글은 1~5000자로 입력하세요.');
+          const body=input.body!.trim();if(body===thread.body)return {result:null,changed:false};
+          thread.body=body;thread.editedAt=now;thread.events.push({id:eventId,type:'edited',at:now,author:by});
         }else if(input.action==='status'){
           if(!status(input.status))throw Error('지원하지 않는 상태입니다.');if(thread.status===input.status)return {result:null,changed:false};
           thread.events.push({id:eventId,type:'status',at:now,author:by,from:thread.status,to:input.status});thread.status=input.status;
