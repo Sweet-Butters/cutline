@@ -2,23 +2,9 @@
   "version": 1,
   "clips": [
     {
-      "id": "intro",
-      "source": "sources/camera-1.mp4",
-      "in": 0,
-      "out": 60,
-      "reason": "원본 소개와 문제 정의"
-    },
-    {
-      "id": "idea",
-      "source": "sources/camera-1.mp4",
-      "in": 60,
-      "out": 120,
-      "reason": "아이디어 설명과 마무리"
-    },
-    {
       "id": "demo",
       "source": "sources/camera-2.mp4",
-      "in": 0,
+      "in": 30,
       "out": 60,
       "reason": "두 번째 카메라의 데모 도입"
     },
