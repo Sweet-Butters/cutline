@@ -73,10 +73,21 @@ export function ensureProxy(root:string,source:string,format:ProxyFormat='webm',
 async function buildProxy(root:string,source:string,format:ProxyFormat,progress:(message:string)=>void):Promise<string> {
   progress('Reading source…');
   const file=await sourcePath(root,source), key=await proxyKey(file,format==='webm'?PROXY_PROFILE:'h264-mp3-640x360-24fps-v1',progress);
-  const target=path.join(cacheDirectory(root),key+'.'+format);
+  const filename=key+'.'+format;
+  const target=path.join(cacheDirectory(root),filename);
   progress('Waiting for proxy worker…');
   return serial(()=>locked(root,async()=>{
     try {await fs.access(target);return target;} catch {}
+    if(process.env.CUTLINE_CACHE_ROOT){
+      const directory=path.join(root,'.cutline-cache');
+      const restored=path.join(directory,filename);
+      // Only register regular project cache files with the playback server.
+      const parent=await fs.lstat(directory).catch(()=>undefined);
+      if(parent?.isDirectory()){
+        const entry=await fs.lstat(restored).catch(()=>undefined);
+        if(entry?.isFile() && entry.size>0)return restored;
+      }
+    }
     const temp=target+'.'+randomUUID()+'.'+format;
     try {
       const codecs=format==='webm'?['-c:v','libvpx','-deadline','realtime','-cpu-used','8','-threads','2','-b:v','700k','-c:a','libvorbis','-q:a','3']:['-c:v','libx264','-preset','veryfast','-crf','26','-threads','2','-pix_fmt','yuv420p','-c:a','libmp3lame','-b:a','96k','-movflags','+faststart'];

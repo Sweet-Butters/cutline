@@ -7,7 +7,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {validate,diffTimeline,edit,writeTimeline,readTimeline,transcripts} from '../core';
-import {proxyKey,validateMedia,run,ensureProxy} from '../media';
+import {cacheDirectory,proxyKey,validateMedia,run,ensureProxy} from '../media';
 import {referenceMetrics} from '../reference';
 import {version,versions,restore} from '../history';
 const base=path.resolve(__dirname,'../..');
@@ -36,6 +36,27 @@ test('concurrent proxy requests share one generation and report progress',async(
   const messages:string[]=[];const first=ensureProxy(dir,'sources/a.mp4','webm',m=>messages.push(m));const second=ensureProxy(dir,'sources/a.mp4');assert.equal(first,second);
   assert.equal(await first,await second);assert.ok(messages.some(m=>m.includes('Generating playback proxy')));
   assert.equal((await fs.readdir(path.join(dir,'.cutline-cache'))).length,1);
+});
+test('launcher reuses a restored project proxy and generates missing formats in the external cache',async()=>{
+  const dir=await fs.mkdtemp(path.join(base,'.test-data','restored-proxy-'));
+  const source='sources/a.mp4';
+  await fs.mkdir(path.join(dir,'sources'));
+  await run('ffmpeg',['-nostdin','-v','error','-y','-i',path.join(base,'sample-project/sources/camera-1.mp4'),'-t','1','-c','copy',path.join(dir,source)]);
+  const previous=process.env.CUTLINE_CACHE_ROOT;
+  try {
+    delete process.env.CUTLINE_CACHE_ROOT;
+    const restored=await ensureProxy(dir,source,'webm');
+    process.env.CUTLINE_CACHE_ROOT=path.join(dir,'portable-cache');
+    const messages:string[]=[];
+    assert.equal(await ensureProxy(dir,source,'webm',m=>messages.push(m)),restored);
+    assert.ok(!messages.some(m=>m.includes('Generating playback proxy')));
+    const generated=await ensureProxy(dir,source,'mp4');
+    assert.equal(path.dirname(generated),cacheDirectory(dir));
+    assert.deepEqual(await fs.readdir(cacheDirectory(dir)),[path.basename(generated)]);
+  } finally {
+    if(previous===undefined)delete process.env.CUTLINE_CACHE_ROOT;
+    else process.env.CUTLINE_CACHE_ROOT=previous;
+  }
 });
 test('schema rejects invalid times, ids, and unsafe sources; accepts empty and fractional times',()=>{
   for(const change of [{in:-1},{out:0},{out:Infinity},{in:'0'},{source:'../a.mp4'},{source:'sources/../a.mp4'},{source:'sources/C:/a.mp4'},{source:'sources/a\\b.mp4'},{id:''},{reason:42}]){const x=t();Object.assign(x.clips[0],change);assert.throws(()=>validate(x));}

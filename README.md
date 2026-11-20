@@ -185,6 +185,8 @@ npm run package
 
 런처의 첫 폴더 인수는 공백·한글 경로도 지원하며 존재하지 않으면 오류로 표시합니다. 인수 없이 실행할 때만 샘플을 복사합니다. `CUTLINE_DOCUMENTS`로 문서 폴더, `CUTLINE_CACHE_ROOT`로 프록시 루트를 지정할 수 있습니다. 번들 기본 캐시는 `data/cache`이며 프로젝트별로 분리합니다. 독립 VSIX/CLI는 환경변수가 없으면 프로젝트의 `.cutline-cache`를 사용합니다.
 
+프로젝트와 함께 받은 프록시를 `.cutline-cache/`에 두면 런처가 원본 내용과 변환 형식에 맞는 파일을 찾아 재사용합니다. 새로운 프록시는 계속 지정된 캐시에 생성합니다.
+
 같은 프로젝트·원본·형식의 동시 프록시 요청은 진행 중 작업을 공유합니다. 프로세스 간 파일 잠금 후 캐시를 다시 확인하므로 중복 변환하지 않습니다. 실제 코덱 재생 실패로 다른 형식이 필요한 경우에는 호환 변환을 수행합니다.
 
 촬영 검증은 `app/verify-launch.ps1`로 실행하며 기본 결과는 `app/screenshots/cutline-launch-2.png`입니다. 검증용 문서·캐시 위치를 저장소 안으로 지정해 다른 디렉터리를 변경하지 않습니다. `-Project "D:\path\project" -Screenshot cutline-chim.png -AllowPreparing`으로 긴 프로젝트의 변환 중 비교 트랙도 확인할 수 있습니다. 이 모드의 화면은 재생 완료 증거가 아니며 JSON 보고서의 canplay를 따로 확인하세요.
