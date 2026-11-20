@@ -2,13 +2,6 @@
   "version": 1,
   "clips": [
     {
-      "id": "demo",
-      "source": "sources/camera-2.mp4",
-      "in": 30,
-      "out": 60,
-      "reason": "두 번째 카메라의 데모 도입"
-    },
-    {
       "id": "result",
       "source": "sources/camera-2.mp4",
       "in": 60,
