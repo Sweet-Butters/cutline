@@ -11,6 +11,7 @@ export async function playbackServer() {
   async function serve(req:IncomingMessage,res:ServerResponse) {
     const file=files.get(req.url??'');
     if(!file){res.writeHead(404).end();return;}
+    if(req.method==='OPTIONS'){res.writeHead(204,{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Range'}).end();return;}
     if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405,{Allow:'GET, HEAD'}).end();return;}
     const info=await stat(file);
     if(!info.isFile()){res.writeHead(404).end();return;}
@@ -26,7 +27,8 @@ export async function playbackServer() {
       status=206;
     }
     res.writeHead(status,{
-      'Accept-Ranges':'bytes','Content-Type':file.endsWith('.webm')?'video/webm':'video/mp4',
+      'Accept-Ranges':'bytes','Content-Type':file.endsWith('.webm')?'video/webm':file.endsWith('.mp3')?'audio/mpeg':file.endsWith('.jpg')?'image/jpeg':'video/mp4',
+      'Access-Control-Allow-Origin':'*',
       'Content-Length':Math.max(0,end-start+1),'Cache-Control':'no-store',
       'X-Content-Type-Options':'nosniff',
       ...(status===206?{'Content-Range':`bytes ${start}-${end}/${size}`}:{})

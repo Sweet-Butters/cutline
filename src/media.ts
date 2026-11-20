@@ -5,6 +5,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {spawn,ChildProcess} from 'node:child_process';
 import {Timeline, sourcePath, validate} from './core';
 import {checkProject,hardFailures} from './check';
+import {sequenceModel} from './sequence';
 const children=new Set<ChildProcess>();
 export function stopMediaWorkers(){for(const child of children)child.kill();}
 process.once('exit',stopMediaWorkers);
@@ -18,11 +19,12 @@ export function run(program: string, args: string[], cwd?: string, onOutput?:(ch
     child.on('error',reject); child.on('close',code=>code===0?resolve(out):reject(Error(`${program} exited ${code}: ${err}`)));
   });
 }
-export async function probe(file: string): Promise<{duration:number;audio:boolean}> {
+export async function probe(file: string,allowAudio=false): Promise<{duration:number;audio:boolean;video:boolean}> {
   const data=JSON.parse(await run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',file]));
   const duration=Number(data.format.duration);
-  if(!data.streams.some((s:any)=>s.codec_type==='video') || !Number.isFinite(duration)||duration<=0) throw Error(`Not a finite video: ${file}`);
-  return {duration,audio:data.streams.some((s:any)=>s.codec_type==='audio')};
+  const video=data.streams.some((s:any)=>s.codec_type==='video'),audio=data.streams.some((s:any)=>s.codec_type==='audio');
+  if((!video&&!(allowAudio&&audio)) || !Number.isFinite(duration)||duration<=0) throw Error(`Not finite media: ${file}`);
+  return {duration,audio,video};
 }
 export async function validateMedia(root: string,t: Timeline) {
   validate(t);
@@ -30,6 +32,12 @@ export async function validateMedia(root: string,t: Timeline) {
   for(const c of t.clips) {
     if(!metadata.has(c.source)) metadata.set(c.source,await probe(await sourcePath(root,c.source)));
     if(c.out>metadata.get(c.source)!.duration+0.025) throw Error(`${c.id}: out ${c.out} exceeds source duration ${metadata.get(c.source)!.duration}`);
+  }
+  if(t.sequence)for(const c of sequenceModel.fromTimeline(t).items.filter(c=>c.source)){
+    const source=c.source!;
+    if(!metadata.has(source))metadata.set(source,await probe(await sourcePath(root,source),c.kind==='audio'));
+    if(c.kind==='video'&&!metadata.get(source)!.video)throw Error(`${c.id}: a video track requires video media`);
+    if(c.out>metadata.get(source)!.duration+.025)throw Error(`${c.id}: out ${c.out} exceeds source duration ${metadata.get(source)!.duration}`);
   }
   return metadata;
 }
@@ -106,6 +114,7 @@ export async function exportTimeline(root:string,t:Timeline,confirm?:(report:Awa
   const report=await checkProject(root,t);
   if(hardFailures(report.results)&&!(await confirm?.(report)))throw Error('hard FAIL: 검증표 확인 후 내보내기를 승인하세요 (CLI: export --allow-hard-fail)');
   const meta=await validateMedia(root,t);
+  if(t.sequence){const {exportSequence}=await import('./sequence-media');return serial(()=>locked(root,()=>exportSequence(root,t,report)));}
   if(!t.clips.length) throw Error('Cannot export an empty timeline');
   return serial(()=>locked(root,async()=>{
     const dir=path.join(root,'exports');await fs.mkdir(dir,{recursive:true});

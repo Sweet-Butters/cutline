@@ -25,7 +25,7 @@ export async function computeSignal(root:string,source:string,publish=true):Prom
   try {signal=JSON.parse(await fs.readFile(cache,'utf8'));signal.source=source;}
   catch(e) {
     if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;
-    const meta=await probe(file),seconds:Signal['seconds']=[];
+    const meta=await probe(file,true),seconds:Signal['seconds']=[];
     if(meta.audio)await new Promise<void>((resolve,reject)=>{
       const child=spawn('ffmpeg',['-nostdin','-v','error','-i',file,'-map','0:a:0','-vn','-ac','1','-ar','8000','-f','s16le','pipe:1'],{windowsHide:true});
       let pending=Buffer.alloc(0),sum=0,count=0,samples=0,err='';

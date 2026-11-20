@@ -1,11 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import {Sequence,sequenceModel} from './sequence';
 
 export interface Clip { id: string; source: string; in: number; out: number; reason?: string }
-export interface Timeline { version: 1; clips: Clip[] }
+export interface Timeline { version: 1; clips: Clip[]; sequence?:Sequence }
 export interface Segment { start: number; end: number; text: string }
 export interface Diff { added: Clip[]; removed: Clip[]; trimmed: Clip[]; moved: string[]; changed: string[]; before: number; after: number }
-export const duration = (t: Timeline) => t.clips.reduce((n,c) => n + c.out - c.in, 0);
+export const duration = (t: Timeline) => t.sequence ? sequenceModel.duration(sequenceModel.fromTimeline(t)) : t.clips.reduce((n,c) => n + c.out - c.in, 0);
 export function validate(value: unknown): Timeline {
   const t = value as Timeline;
   if (!t || t.version !== 1 || !Array.isArray(t.clips)) throw Error('Expected {version:1, clips:[]}');
@@ -17,6 +18,7 @@ export function validate(value: unknown): Timeline {
     if (typeof c.in !== 'number' || typeof c.out !== 'number' || !Number.isFinite(c.in) || !Number.isFinite(c.out) || c.in < 0 || c.out <= c.in) throw Error(`${c.id}: require finite 0 <= in < out`);
     if (c.reason !== undefined && (typeof c.reason !== 'string' || c.reason.length > 1000)) throw Error(`${c.id}: reason must be a short string`);
   }
+  if(t.sequence){sequenceModel.validate(t.sequence);t.sequence=sequenceModel.fromTimeline(t);}
   return t;
 }
 export async function sourcePath(root: string, source: string): Promise<string> {

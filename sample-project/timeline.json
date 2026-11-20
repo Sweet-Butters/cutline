@@ -2,32 +2,131 @@
   "version": 1,
   "clips": [
     {
-      "id": "intro",
-      "source": "sources/camera-1.mp4",
-      "in": 0,
-      "out": 60,
-      "reason": "원본 소개와 문제 정의"
-    },
-    {
-      "id": "idea",
-      "source": "sources/camera-1.mp4",
-      "in": 60,
-      "out": 120,
-      "reason": "아이디어 설명과 마무리"
-    },
-    {
-      "id": "demo",
-      "source": "sources/camera-2.mp4",
-      "in": 0,
-      "out": 60,
-      "reason": "두 번째 카메라의 데모 도입"
-    },
-    {
       "id": "result",
       "source": "sources/camera-2.mp4",
       "in": 60,
       "out": 120,
       "reason": "성과와 다음 단계"
     }
-  ]
+  ],
+  "sequence": {
+    "version": 1,
+    "name": "Sequence 01",
+    "fps": 30,
+    "mixDb": 0,
+    "tracks": [
+      {
+        "id": "CC",
+        "name": "CC",
+        "kind": "caption",
+        "order": 0,
+        "height": 44,
+        "visible": true,
+        "locked": false,
+        "targeted": false,
+        "sourceTarget": false
+      },
+      {
+        "id": "V3",
+        "name": "V3",
+        "kind": "video",
+        "order": 1,
+        "height": 64,
+        "visible": true,
+        "locked": false,
+        "targeted": false,
+        "sourceTarget": false
+      },
+      {
+        "id": "V2",
+        "name": "V2",
+        "kind": "video",
+        "order": 2,
+        "height": 64,
+        "visible": true,
+        "locked": false,
+        "targeted": false,
+        "sourceTarget": false
+      },
+      {
+        "id": "V1",
+        "name": "V1",
+        "kind": "video",
+        "order": 3,
+        "height": 64,
+        "visible": true,
+        "locked": false,
+        "targeted": true,
+        "sourceTarget": true
+      },
+      {
+        "id": "A1",
+        "name": "A1",
+        "kind": "audio",
+        "order": 4,
+        "height": 56,
+        "muted": false,
+        "solo": false,
+        "gainDb": 0,
+        "locked": false,
+        "targeted": true,
+        "sourceTarget": true
+      },
+      {
+        "id": "A2",
+        "name": "A2",
+        "kind": "audio",
+        "order": 5,
+        "height": 56,
+        "muted": false,
+        "solo": false,
+        "gainDb": 0,
+        "locked": false,
+        "targeted": false,
+        "sourceTarget": false
+      },
+      {
+        "id": "A3",
+        "name": "A3",
+        "kind": "audio",
+        "order": 6,
+        "height": 56,
+        "muted": false,
+        "solo": false,
+        "gainDb": 0,
+        "locked": false,
+        "targeted": false,
+        "sourceTarget": false
+      }
+    ],
+    "items": [
+      {
+        "id": "result",
+        "kind": "video",
+        "trackId": "V1",
+        "start": 0,
+        "in": 60,
+        "out": 120,
+        "source": "sources/camera-2.mp4",
+        "name": "camera-2.mp4",
+        "reason": "성과와 다음 단계",
+        "linkGroup": "result"
+      },
+      {
+        "id": "audio-result-a377624",
+        "kind": "audio",
+        "trackId": "A1",
+        "start": 0,
+        "in": 60,
+        "out": 120,
+        "source": "sources/camera-2.mp4",
+        "name": "camera-2.mp4",
+        "linkGroup": "result",
+        "gainDb": 0,
+        "automation": []
+      }
+    ],
+    "markers": [],
+    "legacy": "[{\"id\":\"result\",\"source\":\"sources/camera-2.mp4\",\"in\":60,\"out\":120,\"reason\":\"성과와 다음 단계\"}]"
+  }
 }

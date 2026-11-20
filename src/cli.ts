@@ -4,6 +4,7 @@ import {readTimeline,writeTimeline,edit,duration,transcripts} from './core';
 import {validateMedia,exportTimeline,ensureProxy} from './media';
 import {commit} from './history';
 import {computeSignal,sourceList,candidates,candidateTimeline} from './signals';
+import {sequenceModel} from './sequence';
 export async function main(argv:string[]) {
   const args=[...argv];let root=process.cwd();
   if(args[0]==='--project') {args.shift();root=path.resolve(args.shift()||'.');}
@@ -23,6 +24,7 @@ export async function main(argv:string[]) {
     return;
   }
   const t=await readTimeline(root);
+  if(command==='sequence') {const operation=JSON.parse(args.join(' '));const next=sequenceModel.toTimeline(t,sequenceModel.operate(sequenceModel.fromTimeline(t),operation));await validateMedia(root,next);await writeTimeline(root,next);console.log(`sequence ${operation.action}: ${duration(next).toFixed(3)}s`);return;}
   if(command==='summary') console.log(JSON.stringify({clips:t.clips.length,duration:duration(t),timeline:t},null,2));
   else if(command==='check') {const report=await checkProject(root,t);console.log(args.includes('--json')?JSON.stringify(report,null,2):report.summary+'\n'+report.results.map(r=>`${r.status} [${r.kind}] ${r.id}: ${r.message} | 기대 ${JSON.stringify(r.expected)} | 실제 ${JSON.stringify(r.actual)} | ${JSON.stringify(r.offending)}`).join('\n'));if(hardFailures(report.results))process.exitCode=1;}
   else if(command==='validate') {await validateMedia(root,t);console.log('Timeline valid');}
