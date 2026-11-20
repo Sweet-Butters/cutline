@@ -1,4 +1,5 @@
 import './check-unit';
+import './playback-unit';
 import './signals-unit';
 import {test} from 'node:test';
 import './agent-unit';

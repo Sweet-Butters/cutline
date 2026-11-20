@@ -1,3 +1,4 @@
+import {playbackServer} from './playback';
 import {checkProject} from './check';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
@@ -15,6 +16,8 @@ import {EditSession,recordAgentEdit,same} from './editing';
 export function activate(context:vscode.ExtensionContext) {
   context.subscriptions.push({dispose:stopMediaWorkers});
   const output=vscode.window.createOutputChannel('Cutline',{log:true});context.subscriptions.push(output);
+  let playback:Awaited<ReturnType<typeof playbackServer>>|undefined;
+  context.subscriptions.push({dispose:()=>playback?.dispose()});
   let panel:vscode.WebviewPanel|undefined, root='', current:Timeline|undefined, shown:Timeline|undefined, selected:string|undefined;
   let revision=0, loadRequest=0, ready=false, timer:NodeJS.Timeout|undefined;
   let proxyFormat:ProxyFormat=context.extensionMode===vscode.ExtensionMode.Test?'webm':context.workspaceState.get<ProxyFormat>('proxyFormat','webm');
@@ -91,7 +94,7 @@ export function activate(context:vscode.ExtensionContext) {
       if(token!==revision)return;
       try{const file=await ensureProxy(root,source,proxyFormat,message=>{if(token===revision)void send({type:'status',message:`${source} · ${message}`});});
       if(!panel)return;
-      proxies[source]=panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();}catch(e){if(token===revision)await fail(e);}
+      proxies[source]=playback!.url(file);}catch(e){if(token===revision)await fail(e);}
     }
     const text=await transcripts(root);
     if(token!==revision||!panel)return;
@@ -129,9 +132,13 @@ export function activate(context:vscode.ExtensionContext) {
     if(agent||finishing)throw Error('에이전트 종료를 기다린 후 패널을 다시 여세요');
     edits.clear();
     root=folder??await getRoot();current=undefined;shown=undefined;selected=undefined;ready=false;
+    const transport=await playbackServer();
+    const existingPanel=panel as vscode.WebviewPanel|undefined;
+    if(existingPanel){transport.dispose();existingPanel.reveal(vscode.ViewColumn.One);return;}
+    playback=transport;
     panel=vscode.window.createWebviewPanel('cutline.video',BRAND,vscode.ViewColumn.One,{enableScripts:true,retainContextWhenHidden:true,localResourceRoots:[vscode.Uri.file(cacheDirectory(root)),vscode.Uri.file(path.join(root,'sources')),vscode.Uri.joinPath(context.extensionUri,'media')]});
-    panel.webview.html=html(panel.webview,context.extensionUri);
-    panel.onDidDispose(()=>{void agent?.stop();panel=undefined;ready=false;++revision;if(timer)clearTimeout(timer);watchers.forEach(w=>w.dispose());watchers=[];});
+    panel.webview.html=html(panel.webview,context.extensionUri,playback.origin);
+    panel.onDidDispose(()=>{void agent?.stop();transport.dispose();playback=undefined;panel=undefined;ready=false;++revision;if(timer)clearTimeout(timer);watchers.forEach(w=>w.dispose());watchers=[];});
     const watch=vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root,'timeline.json'));
     const schedule=()=>{if(timer)clearTimeout(timer);timer=setTimeout(()=>void reload(),180);};
     watchers.push(watch,watch.onDidChange(schedule),watch.onDidCreate(schedule),watch.onDidDelete(schedule));
@@ -225,11 +232,11 @@ export function activate(context:vscode.ExtensionContext) {
   },async testAction(action:string,data:object={}){if(context.extensionMode!==vscode.ExtensionMode.Test)throw Error('Test mode only');await send({type:'testAction',action,...data});},dispose(){panel?.dispose();}};
 }
 export function deactivate(){stopMediaWorkers();}
-function html(webview:vscode.Webview,uri:vscode.Uri) {
+function html(webview:vscode.Webview,uri:vscode.Uri,playbackOrigin:string) {
   const nonce=randomBytes(16).toString('hex');
   const script=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','panel.js'));
   const style=webview.asWebviewUri(vscode.Uri.joinPath(uri,'media','panel.css'));
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource};"><link rel="stylesheet" href="${style}"></head><body>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; media-src ${webview.cspSource} ${playbackOrigin};"><link rel="stylesheet" href="${style}"></head><body>
   <header><b>${BRAND}</b><span class="badge">AGENT VIDEO WORKSPACE</span><button id="export">Export MP4</button></header>
   <div class="workspace"><aside id="chat" aria-label="Agent chat"><div class="chat-heading"><b>편집 에이전트</b><select id="backend" aria-label="Agent backend"><option value="claude">Claude</option><option value="codex">Codex</option></select><button id="new-chat" title="새 대화">＋</button></div><p class="chat-hint">원하는 편집을 말해 주세요.<br>내 구독으로 편집하고, 변경은 영상에 바로 반영됩니다.</p><div id="messages" role="log" aria-live="polite"></div><div id="chips"></div><form id="chat-form"><textarea id="prompt" aria-label="편집 요청" placeholder="어떤 영상을 만들까요?" rows="3" maxlength="20000"></textarea><div class="chat-actions"><span id="elapsed">준비됨</span><button id="stop" type="button" disabled>중단</button><button id="send" type="submit">보내기 ↑</button></div></form></aside><div class="video-workspace"><div id="banner" role="status">Waiting for timeline.json</div><div id="error" role="alert" hidden></div>
   <main><details id="checklist"><summary id="check-summary">검증 중…</summary><div id="check-results"></div></details><section class="preview"><video id="video" preload="auto" playsinline></video><div id="empty" hidden>No clips. Ask your agent to build a timeline.</div></section>

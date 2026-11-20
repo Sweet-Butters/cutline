@@ -1,4 +1,4 @@
-/* Browser-only player. No network requests: all media is a VS Code local resource. */
+/* Browser-only player. Playback uses a tokenized server bound to this PC loopback. */
 const vscode=acquireVsCodeApi();
 const $=id=>document.getElementById(id), video=$('video');
 let timeline={clips:[]}, proxies={}, transcripts={}, index=0, playing=false, revision=0, seeking=false;
@@ -169,7 +169,7 @@ window.addEventListener('message',async({data:m})=>{
     if(m.action==='transcript')$('transcript').children[m.index]?.click();
     if(m.action==='version')$('versions').children[m.index]?.click();
     if(m.action==='layout')layoutReport();
-    if(m.action==='snapshot')post('snapshot',{tag:m.tag,index,time:video.currentTime,paused:video.paused,playing,seeking,banner:$('banner').textContent,width:video.videoWidth,frames:video.getVideoPlaybackQuality().totalVideoFrames,audioBytes:video.webkitAudioDecodedByteCount,version:$('version-label').textContent,transcript:$('transcript').textContent,versionCount:$('versions').children.length,error:$('error').hidden?null:$('error').textContent});
+    if(m.action==='snapshot')post('snapshot',{tag:m.tag,index,readyState:video.readyState,networkState:video.networkState,buffered:Array.from({length:video.buffered.length},(_,i)=>[video.buffered.start(i),video.buffered.end(i)]),time:video.currentTime,paused:video.paused,playing,seeking,banner:$('banner').textContent,width:video.videoWidth,frames:video.getVideoPlaybackQuality().totalVideoFrames,audioBytes:video.webkitAudioDecodedByteCount,version:$('version-label').textContent,transcript:$('transcript').textContent,versionCount:$('versions').children.length,error:$('error').hidden?null:$('error').textContent});
   }
 });post('ready');
 
